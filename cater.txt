@@ -1,0 +1,344 @@
+db cart / cart_items > papasok yung mga inadd to cart bago pa loang papasok sa cart
+menu/admin
+
+
+<?php
+/**
+ * Menus API
+ * Handles menu and dish management with cart data
+ */
+
+session_start();
+
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+header('Access-Control-Allow-Origin: *');
+header('Content-Type: application/json');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE');
+header('Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With');
+
+require_once '../../config/database.php';
+require_once '../middleware/auth.php';
+
+requireAuth();
+
+$conn = getDbConnection();
+
+if (!$conn) {
+    sendResponse(false, 'Database connection failed', null, 500);
+}
+
+$method = $_SERVER['REQUEST_METHOD'];
+
+switch ($method) {
+    case 'GET':
+        handleGetMenus($conn);
+        break;
+    case 'POST':
+        handleCreateMenu($conn);
+        break;
+    case 'PUT':
+        handleUpdateMenu($conn);
+        break;
+    case 'DELETE':
+        handleDeleteMenu($conn);
+        break;
+    default:
+        sendResponse(false, 'Method not allowed', null, 405);
+}
+
+/**
+ * GET: Retrieve menus/dishes with cart data
+ */
+function handleGetMenus($conn) {
+    try {
+        $menuID = $_GET['id'] ?? null;
+        $search = $_GET['search'] ?? null;
+        $limit = $_GET['limit'] ?? 100;
+        $offset = $_GET['offset'] ?? 0;
+        $withCart = $_GET['with_cart'] ?? false; // New parameter to include cart data
+        
+        if ($withCart) {
+            // Get menus with cart data and client information
+            $query = "SELECT 
+                        c.CartID,
+                        c.ClientID,
+                        c.MenuID,
+                        c.Quantity,
+                        c.NumberOfPax,
+                        c.Subtotal,
+                        c.AddedAt,
+                        m.DishName,
+                        m.Description,
+                        m.MenuPrice,
+                        cl.Name as ClientName,
+                        cl.Email as ClientEmail,
+                        cl.ContactNumber as ClientContact
+                      FROM cart c
+                      INNER JOIN menu m ON c.MenuID = m.MenuID
+                      INNER JOIN client cl ON c.ClientID = cl.ClientID
+                      WHERE 1=1";
+            
+            $params = [];
+            
+            if ($menuID) {
+                $query .= " AND c.MenuID = :menuID";
+                $params[':menuID'] = $menuID;
+            }
+            
+            if ($search) {
+                $query .= " AND (m.DishName LIKE :search OR m.Description LIKE :search OR cl.Name LIKE :search)";
+                $params[':search'] = "%$search%";
+            }
+            
+            $query .= " ORDER BY c.AddedAt DESC LIMIT :limit OFFSET :offset";
+            
+            $stmt = $conn->prepare($query);
+            
+            foreach ($params as $key => $value) {
+                $stmt->bindValue($key, $value);
+            }
+            $stmt->bindValue(':limit', (int)$limit, PDO::PARAM_INT);
+            $stmt->bindValue(':offset', (int)$offset, PDO::PARAM_INT);
+            
+            $stmt->execute();
+            $cartItems = $stmt->fetchAll();
+            
+            // Get total count
+            $countQuery = "SELECT COUNT(*) as total 
+                          FROM cart c
+                          INNER JOIN menu m ON c.MenuID = m.MenuID
+                          INNER JOIN client cl ON c.ClientID = cl.ClientID
+                          WHERE 1=1";
+            
+            if ($search) {
+                $countQuery .= " AND (m.DishName LIKE :search OR m.Description LIKE :search OR cl.Name LIKE :search)";
+            }
+            
+            $stmtCount = $conn->prepare($countQuery);
+            if ($search) {
+                $stmtCount->bindValue(':search', "%$search%");
+            }
+            $stmtCount->execute();
+            $totalCount = $stmtCount->fetch()['total'];
+            
+            sendResponse(true, 'Cart data retrieved successfully', [
+                'cart_items' => $cartItems,
+                'total' => $totalCount,
+                'limit' => (int)$limit,
+                'offset' => (int)$offset
+            ], 200);
+            
+        } else {
+            // Original menu query (without cart data)
+            $query = "SELECT 
+                        MenuID,
+                        DishName,
+                        Description,
+                        MenuPrice
+                      FROM menu
+                      WHERE 1=1";
+            
+            $params = [];
+            
+            if ($menuID) {
+                $query .= " AND MenuID = :menuID";
+                $params[':menuID'] = $menuID;
+            }
+            
+            if ($search) {
+                $query .= " AND (DishName LIKE :search OR Description LIKE :search)";
+                $params[':search'] = "%$search%";
+            }
+            
+            $query .= " ORDER BY DishName ASC LIMIT :limit OFFSET :offset";
+            
+            $stmt = $conn->prepare($query);
+            
+            foreach ($params as $key => $value) {
+                $stmt->bindValue($key, $value);
+            }
+            $stmt->bindValue(':limit', (int)$limit, PDO::PARAM_INT);
+            $stmt->bindValue(':offset', (int)$offset, PDO::PARAM_INT);
+            
+            $stmt->execute();
+            $menus = $stmt->fetchAll();
+            
+            // Get total count
+            $countQuery = "SELECT COUNT(*) as total FROM menu WHERE 1=1";
+            if ($search) {
+                $countQuery .= " AND (DishName LIKE :search OR Description LIKE :search)";
+            }
+            
+            $stmtCount = $conn->prepare($countQuery);
+            if ($search) {
+                $stmtCount->bindValue(':search', "%$search%");
+            }
+            $stmtCount->execute();
+            $totalCount = $stmtCount->fetch()['total'];
+            
+            sendResponse(true, 'Menus retrieved successfully', [
+                'menus' => $menus,
+                'total' => $totalCount,
+                'limit' => (int)$limit,
+                'offset' => (int)$offset
+            ], 200);
+        }
+        
+    } catch (PDOException $e) {
+        error_log("Get Menus Error: " . $e->getMessage());
+        sendResponse(false, 'Error retrieving menus', null, 500);
+    }
+}
+
+/**
+ * POST: Create new menu item
+ */
+function handleCreateMenu($conn) {
+    try {
+        $data = json_decode(file_get_contents("php://input"), true);
+        
+        $requiredFields = ['dish_name', 'menu_price'];
+        $missingFields = validateRequiredFields($data, $requiredFields);
+        
+        if (!empty($missingFields)) {
+            sendResponse(false, 'Missing required fields: ' . implode(', ', $missingFields), null, 400);
+        }
+        
+        $dishName = sanitizeInput($data['dish_name']);
+        $description = isset($data['description']) ? sanitizeInput($data['description']) : null;
+        $menuPrice = (float)$data['menu_price'];
+        
+        // Validate price
+        if ($menuPrice <= 0) {
+            sendResponse(false, 'Price must be greater than 0', null, 400);
+        }
+        
+        // Insert menu item
+        $query = "INSERT INTO menu (DishName, Description, MenuPrice) 
+                  VALUES (:dishName, :description, :menuPrice)";
+        
+        $stmt = $conn->prepare($query);
+        $stmt->execute([
+            ':dishName' => $dishName,
+            ':description' => $description,
+            ':menuPrice' => $menuPrice
+        ]);
+        
+        $menuID = $conn->lastInsertId();
+        
+        logActivity($conn, getCurrentAdminId(), 'admin', 'menu_created', "Created menu item #$menuID - $dishName", $_SERVER['REMOTE_ADDR']);
+        
+        sendResponse(true, 'Menu item created successfully', ['menu_id' => $menuID], 201);
+        
+    } catch (PDOException $e) {
+        error_log("Create Menu Error: " . $e->getMessage());
+        sendResponse(false, 'Error creating menu item', null, 500);
+    }
+}
+
+/**
+ * PUT: Update menu item
+ */
+function handleUpdateMenu($conn) {
+    try {
+        $data = json_decode(file_get_contents("php://input"), true);
+        
+        if (!isset($data['menu_id']) || empty($data['menu_id'])) {
+            sendResponse(false, 'Menu ID is required', null, 400);
+        }
+        
+        $menuID = (int)$data['menu_id'];
+        
+        // Check if menu exists
+        $checkQuery = "SELECT MenuID FROM menu WHERE MenuID = :menuID LIMIT 1";
+        $stmt = $conn->prepare($checkQuery);
+        $stmt->execute([':menuID' => $menuID]);
+        
+        if ($stmt->rowCount() === 0) {
+            sendResponse(false, 'Menu item not found', null, 404);
+        }
+        
+        // Build update query
+        $updateFields = [];
+        $params = [':menuID' => $menuID];
+        
+        if (isset($data['dish_name'])) {
+            $updateFields[] = "DishName = :dishName";
+            $params[':dishName'] = sanitizeInput($data['dish_name']);
+        }
+        
+        if (isset($data['description'])) {
+            $updateFields[] = "Description = :description";
+            $params[':description'] = sanitizeInput($data['description']);
+        }
+        
+        if (isset($data['menu_price'])) {
+            $price = (float)$data['menu_price'];
+            if ($price <= 0) {
+                sendResponse(false, 'Price must be greater than 0', null, 400);
+            }
+            $updateFields[] = "MenuPrice = :menuPrice";
+            $params[':menuPrice'] = $price;
+        }
+        
+        if (empty($updateFields)) {
+            sendResponse(false, 'No fields to update', null, 400);
+        }
+        
+        $query = "UPDATE menu SET " . implode(', ', $updateFields) . " WHERE MenuID = :menuID";
+        $stmt = $conn->prepare($query);
+        $stmt->execute($params);
+        
+        logActivity($conn, getCurrentAdminId(), 'admin', 'menu_updated', "Updated menu item #$menuID", $_SERVER['REMOTE_ADDR']);
+        
+        sendResponse(true, 'Menu item updated successfully', null, 200);
+        
+    } catch (PDOException $e) {
+        error_log("Update Menu Error: " . $e->getMessage());
+        sendResponse(false, 'Error updating menu item', null, 500);
+    }
+}
+
+/**
+ * DELETE: Delete menu item
+ */
+function handleDeleteMenu($conn) {
+    try {
+        $data = json_decode(file_get_contents("php://input"), true);
+        
+        if (!isset($data['menu_id']) || empty($data['menu_id'])) {
+            sendResponse(false, 'Menu ID is required', null, 400);
+        }
+        
+        $menuID = (int)$data['menu_id'];
+        
+        // Check if menu is used in bookings
+        $checkBookings = "SELECT COUNT(*) as total FROM booking_menu WHERE MenuID = :menuID";
+        $stmt = $conn->prepare($checkBookings);
+        $stmt->execute([':menuID' => $menuID]);
+        $bookingCount = $stmt->fetch()['total'];
+        
+        if ($bookingCount > 0) {
+            sendResponse(false, "Cannot delete menu item with existing bookings ($bookingCount bookings found)", null, 409);
+        }
+        
+        // Delete menu item
+        $query = "DELETE FROM menu WHERE MenuID = :menuID";
+        $stmt = $conn->prepare($query);
+        $stmt->execute([':menuID' => $menuID]);
+        
+        if ($stmt->rowCount() === 0) {
+            sendResponse(false, 'Menu item not found', null, 404);
+        }
+        
+        logActivity($conn, getCurrentAdminId(), 'admin', 'menu_deleted', "Deleted menu item #$menuID", $_SERVER['REMOTE_ADDR']);
+        
+        sendResponse(true, 'Menu item deleted successfully', null, 200);
+        
+    } catch (PDOException $e) {
+        error_log("Delete Menu Error: " . $e->getMessage());
+        sendResponse(false, 'Error deleting menu item', null, 500);
+    }
+}     
