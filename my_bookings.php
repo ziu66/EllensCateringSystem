@@ -5,6 +5,8 @@ require_once 'includes/security.php';
 startSecureSession();
 requireLogin();
 
+$clientID = getClientID(); 
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_payment_method'])) {
     header('Content-Type: application/json');
     
@@ -494,69 +496,99 @@ $stmt->close();
         }
 
         /* GCash Modal */
-        .gcash-modal {
-            display: none;
-            position: fixed;
-            z-index: 99999;  /* ← SUPER HIGH z-index */
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.8);
-            animation: fadeIn 0.3s;
-        }
+/* GCash Modal */
+.gcash-modal {
+    display: none;
+    position: fixed;
+    z-index: 99999;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    animation: fadeIn 0.3s;
+}
 
-        .gcash-modal-content {
-            background-color: white;
-            margin: 5% auto;
-            padding: 40px;
-            border-radius: 20px;
-            width: 90%;
-            max-width: 500px;
-            text-align: center;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-            animation: slideUp 0.3s;
-            position: relative;  /* ← ADD THIS */
-            z-index: 100000;    /* ← ADD THIS */
-        }
+.gcash-modal-content {
+    background-color: white;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 30px;
+    border-radius: 20px;
+    width: 90%;
+    max-width: 450px;
+    max-height: 90vh;
+    overflow-y: auto;
+    text-align: center;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    animation: slideUp 0.3s;
+    z-index: 100000;
+}
 
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
 
-        @keyframes slideUp {
-            from { transform: translateY(50px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
+@keyframes slideUp {
+    from { transform: translate(-50%, -40%); opacity: 0; }
+    to { transform: translate(-50%, -50%); opacity: 1; }
+}
 
-        .gcash-logo {
-            color: #007dfe;
-            font-size: 3rem;
-            margin-bottom: 20px;
-        }
+.gcash-logo {
+    color: #007dfe;
+    font-size: 2.5rem;
+    margin-bottom: 15px;
+}
 
-        .qr-code-container {
-            background: white;
-            padding: 20px;
-            border-radius: 15px;
-            display: inline-block;
-            margin: 20px 0;
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
-        }
+.qr-code-container {
+    background: white;
+    padding: 15px;
+    border-radius: 15px;
+    display: inline-block;
+    margin: 15px 0;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+}
 
-        .close-modal {
-            color: var(--medium-gray);
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: color 0.3s;
-        }
+.qr-code-container img {
+    width: 200px !important;
+    height: 200px !important;
+    display: block;
+}
 
-        .close-modal:hover {
-            color: var(--primary-dark);
-        }
+.close-modal {
+    color: var(--medium-gray);
+    position: absolute;
+    right: 20px;
+    top: 15px;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: color 0.3s;
+    line-height: 1;
+}
+
+.close-modal:hover {
+    color: var(--primary-dark);
+}
+
+@media (max-width: 576px) {
+    .gcash-modal-content {
+        width: 95%;
+        padding: 20px;
+    }
+    
+    .gcash-logo {
+        font-size: 2rem;
+    }
+    
+    .qr-code-container img {
+        width: 180px !important;
+        height: 180px !important;
+    }
+}
 
     </style>
 </head>
@@ -711,77 +743,6 @@ $stmt->close();
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
-        function cancelBooking(bookingId) {
-            if (confirm('Are you sure you want to cancel this booking?\n\nThis action cannot be undone and the booking will be permanently cancelled.')) {
-                // Send cancellation request
-                window.location.href = `cancel_booking.php?id=${bookingId}`;
-            }
-        }
-    </script>
-
-    <!-- Payment Modal -->
-    <div class="modal fade" id="paymentModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content" style="border-radius: 20px;">
-                <div class="modal-header" style="background: var(--primary-dark); color: white; border-radius: 20px 20px 0 0;">
-                    <h5 class="modal-title"><i class="bi bi-credit-card me-2"></i>Select Payment Method</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-4">
-                    <input type="hidden" id="paymentBookingId">
-                    <input type="hidden" id="paymentAmount">
-                    
-                    <div class="payment-option-modal mb-3" id="cashOption">
-                        <i class="bi bi-cash-stack me-3" style="font-size: 2rem;"></i>
-                        <div>
-                            <strong>Cash</strong>
-                            <p class="mb-0 text-muted">Pay with cash on the event day</p>
-                        </div>
-                    </div>
-
-                    <div class="payment-option-modal mb-3" id="gcashOption">
-                        <i class="bi bi-phone me-3" style="font-size: 2rem;"></i>
-                        <div>
-                            <strong>GCash</strong>
-                            <p class="mb-0 text-muted">Scan QR code to pay instantly</p>
-                        </div>
-                    </div>
-
-                    <div class="payment-option-modal" id="bankOption">
-                        <i class="bi bi-bank me-3" style="font-size: 2rem;"></i>
-                        <div>
-                            <strong>Bank Transfer</strong>
-                            <p class="mb-0 text-muted">Transfer via online banking</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <style>
-    .payment-option-modal {
-        border: 2px solid var(--border-gray);
-        border-radius: 15px;
-        padding: 20px;
-        cursor: pointer;
-        transition: all 0.3s;
-        display: flex;
-        align-items: center;
-    }
-
-    .payment-option-modal:hover {
-        border-color: var(--primary-dark);
-        background: var(--light-gray);
-        transform: translateX(5px);
-    }
-
-    .payment-option-modal i {
-        color: var(--primary-dark);
-    }
-    </style>
-
-<script>
 // Show payment modal
 function showPaymentModal(bookingId, amount) {
     document.getElementById('paymentBookingId').value = bookingId;
@@ -811,71 +772,6 @@ function formatCardNumber(input) {
     input.value = formattedValue;
 }
 
-// Main payment method selection handler
-function selectPaymentMethod(bookingId, method, amount) {
-    // Bank Transfer - show details modal first
-    if (method === 'Bank Transfer') {
-        showBankDetailsModal(bookingId, method, amount);
-        return;
-    }
-    
-    // Cash - show confirmation dialog
-    if (method === 'Cash') {
-        if (!confirm(`Confirm payment with Cash?\n\nBooking ID: #${bookingId}\nAmount: ₱${parseFloat(amount).toLocaleString('en-PH', {minimumFractionDigits: 2})}`)) {
-            return;
-        }
-    }
-    
-    // GCash - NO confirmation, proceed directly to process
-    // (the GCash QR modal itself serves as the confirmation)
-    
-    const formData = new FormData();
-    formData.append('update_payment_method', '1');
-    formData.append('booking_id', bookingId);
-    formData.append('payment_method', method);
-    
-    // Show loading state if it's a clickable element
-    let button = null;
-    if (event && event.target) {
-        button = event.target.closest('.payment-option-modal') || event.target;
-        const originalHTML = button.innerHTML;
-        button.innerHTML = '<div class="text-center"><i class="bi bi-hourglass-split"></i> Processing...</div>';
-        button.style.pointerEvents = 'none';
-    }
-    
-    fetch('my_bookings.php', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            if (data.show_gcash) {
-                // Show GCash modal immediately - NO alert
-                showGCashModal(data.total_amount, data.booking_id);
-            } else {
-                // For Cash payment - show success message
-                alert(data.message);
-                location.reload();
-            }
-        } else {
-            alert(data.message || 'Failed to update payment method');
-            if (button) {
-                button.innerHTML = originalHTML;
-                button.style.pointerEvents = 'auto';
-            }
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('An error occurred. Please try again.');
-        if (button) {
-            button.innerHTML = originalHTML;
-            button.style.pointerEvents = 'auto';
-        }
-    });
-}
-
 // Handle payment selection from modal (closes modal first)
 function selectPaymentMethodFromModal(bookingId, method, amount) {
     // Close the payment modal first
@@ -889,8 +785,220 @@ function selectPaymentMethodFromModal(bookingId, method, amount) {
     
     // Small delay to let modal close animation finish
     setTimeout(() => {
-        selectPaymentMethod(bookingId, method, amount);
+        if (method === 'Bank Transfer') {
+            showBankDetailsModal(bookingId, method, amount);
+        } else if (method === 'Cash') {
+            showCashConfirmationModal(bookingId, method, amount);
+        } else if (method === 'GCash') {
+            showGCashConfirmationModal(bookingId, method, amount);
+        }
     }, 300);
+}
+
+// Show Cash Confirmation Modal
+function showCashConfirmationModal(bookingId, method, amount) {
+    const existingModal = document.querySelector('.cash-confirmation-modal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    const modal = document.createElement('div');
+    modal.className = 'cash-confirmation-modal';
+    modal.innerHTML = `
+        <div class="modal fade show" style="display: block; background: rgba(0,0,0,0.5);" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content" style="border-radius: 15px; border: none;">
+                    <div class="modal-header" style="background: var(--primary-dark); color: white; border-radius: 15px 15px 0 0;">
+                        <h5 class="modal-title"><i class="bi bi-cash-stack me-2"></i>Cash Payment Confirmation</h5>
+                        <button type="button" class="btn-close btn-close-white" onclick="closeCashModal()"></button>
+                    </div>
+                    <div class="modal-body" style="padding: 25px;">
+                        <div class="text-center mb-4">
+                            <i class="bi bi-cash-stack" style="font-size: 4rem; color: #28a745;"></i>
+                        </div>
+                        
+                        <div class="alert alert-info" style="border-radius: 10px;">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>Booking ID:</strong> #${bookingId}<br>
+                            <strong>Amount:</strong> ₱${parseFloat(amount).toLocaleString('en-PH', {minimumFractionDigits: 2})}
+                        </div>
+                        
+                        <div class="alert alert-success" style="border-radius: 10px;">
+                            <h6><i class="bi bi-check-circle me-2"></i>Cash Payment Instructions</h6>
+                            <ul class="mb-0">
+                                <li>Please prepare the exact amount on the event day</li>
+                                <li>Payment will be collected before the event starts</li>
+                                <li>A receipt will be provided upon payment</li>
+                            </ul>
+                        </div>
+                        
+                        <p class="text-center text-muted mb-0">
+                            <i class="bi bi-exclamation-triangle me-1"></i>
+                            Please ensure you have the full amount ready on your event date.
+                        </p>
+                    </div>
+                    <div class="modal-footer" style="border-top: 1px solid #dee2e6; padding: 20px;">
+                        <button class="btn btn-secondary" onclick="closeCashModal()" style="border-radius: 8px; padding: 10px 20px;">
+                            <i class="bi bi-x-circle me-1"></i>Cancel
+                        </button>
+                        <button class="btn btn-success" onclick="submitCashPayment(${bookingId}, '${method}')" 
+                                style="border: none; border-radius: 8px; padding: 10px 20px;">
+                            <i class="bi bi-check-circle me-1"></i>Confirm Cash Payment
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+// Close Cash modal
+function closeCashModal() {
+    const modal = document.querySelector('.cash-confirmation-modal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// Submit Cash payment
+function submitCashPayment(bookingId, method) {
+    const formData = new FormData();
+    formData.append('update_payment_method', '1');
+    formData.append('booking_id', bookingId);
+    formData.append('payment_method', method);
+    
+    const submitBtn = event.target;
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Processing...';
+    submitBtn.disabled = true;
+    
+    fetch('my_bookings.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        closeCashModal();
+        if (data.success) {
+            alert('✓ Cash payment method confirmed!\n\nPlease prepare the exact amount on your event day.');
+            location.reload();
+        } else {
+            alert(data.message || 'Failed to update payment method');
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred. Please try again.');
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    });
+}
+
+// Show GCash Confirmation Modal
+function showGCashConfirmationModal(bookingId, method, amount) {
+    const existingModal = document.querySelector('.gcash-confirmation-modal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    const modal = document.createElement('div');
+    modal.className = 'gcash-confirmation-modal';
+    modal.innerHTML = `
+        <div class="modal fade show" style="display: block; background: rgba(0,0,0,0.5);" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content" style="border-radius: 15px; border: none;">
+                    <div class="modal-header" style="background: #007dfe; color: white; border-radius: 15px 15px 0 0;">
+                        <h5 class="modal-title"><i class="bi bi-phone me-2"></i>GCash Payment Confirmation</h5>
+                        <button type="button" class="btn-close btn-close-white" onclick="closeGCashConfirmationModal()"></button>
+                    </div>
+                    <div class="modal-body" style="padding: 25px;">
+                        <div class="text-center mb-4">
+                            <i class="bi bi-phone-fill" style="font-size: 4rem; color: #007dfe;"></i>
+                        </div>
+                        
+                        <div class="alert alert-info" style="border-radius: 10px;">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>Booking ID:</strong> #${bookingId}<br>
+                            <strong>Amount:</strong> ₱${parseFloat(amount).toLocaleString('en-PH', {minimumFractionDigits: 2})}
+                        </div>
+                        
+                        <div class="alert alert-primary" style="border-radius: 10px; background: #e7f3ff; border-color: #007dfe;">
+                            <h6><i class="bi bi-qr-code me-2"></i>GCash Payment Process</h6>
+                            <ol class="mb-0">
+                                <li>Click "Proceed to GCash QR" below</li>
+                                <li>Scan the QR code with your GCash app</li>
+                                <li>Complete the payment in GCash</li>
+                                <li>Save your reference number for verification</li>
+                            </ol>
+                        </div>
+                        
+                        <p class="text-center text-muted mb-0">
+                            <i class="bi bi-shield-check me-1"></i>
+                            Your QR code will be displayed after confirmation.
+                        </p>
+                    </div>
+                    <div class="modal-footer" style="border-top: 1px solid #dee2e6; padding: 20px;">
+                        <button class="btn btn-secondary" onclick="closeGCashConfirmationModal()" style="border-radius: 8px; padding: 10px 20px;">
+                            <i class="bi bi-x-circle me-1"></i>Cancel
+                        </button>
+                        <button class="btn" onclick="submitGCashPayment(${bookingId}, '${method}', ${amount})" 
+                                style="background: #007dfe; color: white; border: none; border-radius: 8px; padding: 10px 20px;">
+                            <i class="bi bi-qr-code me-1"></i>Proceed to GCash QR
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+// Close GCash Confirmation modal
+function closeGCashConfirmationModal() {
+    const modal = document.querySelector('.gcash-confirmation-modal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// Submit GCash payment
+function submitGCashPayment(bookingId, method, amount) {
+    const formData = new FormData();
+    formData.append('update_payment_method', '1');
+    formData.append('booking_id', bookingId);
+    formData.append('payment_method', method);
+    
+    const submitBtn = event.target;
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Processing...';
+    submitBtn.disabled = true;
+    
+    fetch('my_bookings.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        closeGCashConfirmationModal();
+        
+        if (data.success) {
+            // Remove the immediate modal show, let the page reload handle it
+            location.reload(); // This will trigger the session-based auto-show
+        } else {
+            alert(data.message || 'Failed to update payment method');
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred. Please try again.');
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    });
 }
 
 // Show bank transfer details modal
@@ -1095,6 +1203,68 @@ function cancelBooking(bookingId) {
 }
 </script>
 
+    <!-- Payment Modal -->
+    <div class="modal fade" id="paymentModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="border-radius: 20px;">
+                <div class="modal-header" style="background: var(--primary-dark); color: white; border-radius: 20px 20px 0 0;">
+                    <h5 class="modal-title"><i class="bi bi-credit-card me-2"></i>Select Payment Method</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <input type="hidden" id="paymentBookingId">
+                    <input type="hidden" id="paymentAmount">
+                    
+                    <div class="payment-option-modal mb-3" id="cashOption">
+                        <i class="bi bi-cash-stack me-3" style="font-size: 2rem;"></i>
+                        <div>
+                            <strong>Cash</strong>
+                            <p class="mb-0 text-muted">Pay with cash on the event day</p>
+                        </div>
+                    </div>
+
+                    <div class="payment-option-modal mb-3" id="gcashOption">
+                        <i class="bi bi-phone me-3" style="font-size: 2rem;"></i>
+                        <div>
+                            <strong>GCash</strong>
+                            <p class="mb-0 text-muted">Scan QR code to pay instantly</p>
+                        </div>
+                    </div>
+
+                    <div class="payment-option-modal" id="bankOption">
+                        <i class="bi bi-bank me-3" style="font-size: 2rem;"></i>
+                        <div>
+                            <strong>Bank Transfer</strong>
+                            <p class="mb-0 text-muted">Transfer via online banking</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+    .payment-option-modal {
+        border: 2px solid var(--border-gray);
+        border-radius: 15px;
+        padding: 20px;
+        cursor: pointer;
+        transition: all 0.3s;
+        display: flex;
+        align-items: center;
+    }
+
+    .payment-option-modal:hover {
+        border-color: var(--primary-dark);
+        background: var(--light-gray);
+        transform: translateX(5px);
+    }
+
+    .payment-option-modal i {
+        color: var(--primary-dark);
+    }
+    </style>
+
     <!-- GCash QR Code Modal -->
     <div id="gcashModal" class="gcash-modal" style="display: none;">
         <div class="gcash-modal-content">
@@ -1102,31 +1272,31 @@ function cancelBooking(bookingId) {
             <div class="gcash-logo">
                 <i class="bi bi-phone-fill"></i>
             </div>
-            <h2 style="color: var(--primary-dark); font-weight: 700; margin-bottom: 10px;">GCash Payment</h2>
-            <p style="color: var(--medium-gray); margin-bottom: 20px;">Scan the QR code below to complete your payment</p>
+            <h2 style="color: var(--primary-dark); font-weight: 700; margin-bottom: 8px; font-size: 1.5rem;">GCash Payment</h2>
+            <p style="color: var(--medium-gray); margin-bottom: 15px; font-size: 0.95rem;">Scan the QR code below to complete your payment</p>
             
             <div class="qr-code-container">
-                <img id="gcashQRCode" src="gcash_qr.jpg" alt="GCash QR Code" style="width: 250px; height: 250px;">
+                <img id="gcashQRCode" src="gcash_qr.jpg" alt="GCash QR Code">
             </div>
             
-            <div style="background: #f0f8ff; padding: 15px; border-radius: 10px; margin: 20px 0;">
+            <div style="background: #f0f8ff; padding: 12px; border-radius: 10px; margin: 15px 0; font-size: 0.9rem;">
                 <p style="margin: 0; color: var(--text-dark); font-weight: 600;">
-                    <i class="bi bi-info-circle me-2"></i>Account Name: Ellen's Catering
+                    <i class="bi bi-info-circle me-2"></i>Account: Ellen's Catering
                 </p>
                 <p style="margin: 5px 0 0 0; color: var(--text-dark); font-weight: 600;">
                     <i class="bi bi-receipt me-2"></i>Booking ID: #<span id="gcashBookingId"></span>
                 </p>
-                <p style="margin: 10px 0 0 0; color: var(--text-dark); font-weight: 700; font-size: 1.3rem;">
+                <p style="margin: 8px 0 0 0; color: var(--text-dark); font-weight: 700; font-size: 1.2rem;">
                     Amount: ₱<span id="gcashAmount">0.00</span>
                 </p>
             </div>
             
-            <p style="color: var(--medium-gray); font-size: 0.9rem; margin-bottom: 20px;">
+            <p style="color: var(--medium-gray); font-size: 0.85rem; margin-bottom: 15px;">
                 <i class="bi bi-shield-check me-1"></i>
-                After payment, please keep your reference number for verification.
+                Keep your reference number for verification.
             </p>
             
-            <button onclick="closeGCashModal()" type="button" style="background: var(--primary-dark); color: white; border: none; padding: 12px 30px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+            <button onclick="closeGCashModal()" type="button" style="background: var(--primary-dark); color: white; border: none; padding: 10px 25px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.95rem;">
                 <i class="bi bi-check-circle me-2"></i>I've Completed Payment
             </button>
         </div>
