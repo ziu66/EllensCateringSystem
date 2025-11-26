@@ -97,6 +97,9 @@ CREATE TABLE `booking` (
   `SpecialRequests` text DEFAULT NULL,
   `Status` enum('Pending','Confirmed','Completed','Cancelled') DEFAULT NULL,
   `TotalAmount` decimal(10,2) DEFAULT NULL,
+  `PaymentStatus` enum('Pending Payment','Processing','Paid','Failed') DEFAULT 'Pending Payment',
+  `PaymentMethod` enum('Cash','GCash','Bank Transfer') DEFAULT NULL,
+  `PaymentDate` datetime DEFAULT NULL,
   `CreatedAt` timestamp NOT NULL DEFAULT current_timestamp(),
   `UpdatedAt` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -299,6 +302,8 @@ CREATE TABLE `quotation` (
   `AdminID` int(11) DEFAULT NULL,
   `SpecialRequest` text DEFAULT NULL,
   `EstimatedPrice` decimal(10,2) DEFAULT NULL,
+  `SpecialRequestPrice` decimal(10,2) DEFAULT 0,
+  `SpecialRequestItems` json DEFAULT NULL,
   `Status` enum('Pending','Approved','Rejected') DEFAULT 'Pending'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 

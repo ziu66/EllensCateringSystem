@@ -145,10 +145,148 @@ body {
     background-color: var(--primary-dark);
     color: white;
     border: none;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.875rem;
+    letter-spacing: 0.5px;
+    padding: 1rem;
+}
+
+.table tbody tr {
+    border-bottom: 1px solid #f0f0f0;
+    transition: background-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .table-hover tbody tr:hover {
-    background-color: var(--light-gray);
+    background-color: #f8f9fa;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+}
+
+.table-light thead {
+    background-color: var(--primary-dark);
+}
+
+.table-light thead th {
+    background-color: var(--primary-dark);
+    color: white;
+    border: none;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.875rem;
+    letter-spacing: 0.5px;
+    padding: 1rem;
+}
+
+/* Enhanced Payment Tables */
+
+.payments-section .card {
+    border: 1px solid #e0e0e0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+}
+
+.payments-section .card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.bg-gradient {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.payments-section .card-header.bg-gradient {
+    padding: 1.25rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.stat-card .stat-icon {
+    font-size: 2.5rem;
+    opacity: 0.8;
+}
+
+/* Badge Styles */
+
+.badge {
+    padding: 0.5rem 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+}
+
+/* Payment badge: icon + label with good contrast */
+.payment-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.65rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+.payment-badge .bi {
+    font-size: 1.05rem;
+    opacity: 0.95;
+}
+
+/* Table title/caption styling for payments tables */
+.table-title {
+    caption-side: top;
+    text-align: left;
+    font-size: 0.95rem;
+    font-weight: 600;
+    padding: 0.6rem 0.75rem;
+    color: #495057;
+}
+
+.badge-pending {
+    background-color: #6c757d;
+}
+
+.badge-confirmed {
+    background-color: #000;
+}
+
+.badge-completed {
+    background-color: #495057;
+}
+
+.badge-cancelled {
+    background-color: #dee2e6;
+    color: #000;
+}
+
+/* Button Enhancements */
+
+.btn-sm {
+    padding: 0.4rem 0.8rem;
+    font-weight: 500;
+}
+
+.btn-success {
+    background-color: #28a745;
+    border-color: #28a745;
+}
+
+.btn-success:hover {
+    background-color: #218838;
+    border-color: #1e7e34;
+}
+
+/* Input Enhancements */
+
+.input-group-text {
+    border: 1px solid #e0e0e0;
+}
+
+.form-control,
+.form-select {
+    border: 1px solid #e0e0e0;
+    transition: all 0.2s ease;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
 }
 
 
@@ -430,6 +568,57 @@ body {
 
 .form-label:not([class*="required"])::after {
     content: "";
+}
+
+
+/* Toast Notification Styles */
+
+.toast-notification {
+    display: flex;
+    align-items: center;
+    border: none;
+    border-left: 4px solid;
+    font-weight: 500;
+}
+
+.toast-notification.alert-success {
+    background-color: #d4edda;
+    color: #155724;
+    border-left-color: #28a745;
+}
+
+.toast-notification.alert-danger {
+    background-color: #f8d7da;
+    color: #721c24;
+    border-left-color: #dc3545;
+}
+
+.toast-notification i {
+    font-size: 1.25rem;
+}
+
+/* Toast Animations */
+
+@keyframes slideIn {
+    from {
+        transform: translateX(400px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOut {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(400px);
+        opacity: 0;
+    }
 }
 
 

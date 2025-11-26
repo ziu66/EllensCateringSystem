@@ -783,12 +783,13 @@ const pages = {
                                 <th>Date</th>
                                 <th>Guests</th>
                                 <th>Status</th>
+                                <th>Payment</th>
                                 <th>Amount</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="bookingsTable">
-                            <tr><td colspan="8" class="text-center">Loading...</td></tr>
+                            <tr><td colspan="9" class="text-center">Loading...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1037,6 +1038,115 @@ const pages = {
         </div>
     `,
 
+    payments: `
+        <div class="row mb-4">
+            <div class="col-md-6 mb-3">
+                <div class="card stat-card">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <p class="text-muted mb-1">Pending Payments</p>
+                                <h3 class="mb-0" id="pendingPaymentCount">0</h3>
+                                <small class="text-warning"><i class="bi bi-clock-history me-1"></i>Awaiting confirmation</small>
+                            </div>
+                            <div class="stat-icon">
+                                <i class="bi bi-hourglass-split fs-4" style="color: #ffc107;"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-3">
+                <div class="card stat-card">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <p class="text-muted mb-1">Confirmed Payments</p>
+                                <h3 class="mb-0" id="confirmedPaymentCount">0</h3>
+                                <small class="text-success"><i class="bi bi-check-circle me-1"></i>Successfully received</small>
+                            </div>
+                            <div class="stat-icon">
+                                <i class="bi bi-check-circle-fill fs-4" style="color: #28a745;"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-gradient" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Pending Payments</h5>
+                    <small>Processing</small>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3 g-2">
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <span class="input-group-text bg-light border-0"><i class="bi bi-search"></i></span>
+                            <input type="text" class="form-control border-0" placeholder="Search by ID or client name..." id="searchPayments" onkeyup="filterPayments()">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <select class="form-select border-0" id="filterPaymentMethod" onchange="filterPayments()">
+                            <option value="">All Payment Methods</option>
+                            <option value="Cash">💵 Cash</option>
+                            <option value="GCash">📱 GCash</option>
+                            <option value="Bank Transfer">🏦 Bank Transfer</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <caption class="table-title text-muted">Pending Payments</caption>
+                        <thead class="table-light">
+                            <tr>
+                                <th>Booking ID</th>
+                                <th>Client</th>
+                                <th>Event Date</th>
+                                <th>Amount</th>
+                                <th>Payment</th>
+                                <th>Selected</th>
+                                <th class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pendingPaymentsTable">
+                            <tr><td colspan="7" class="text-center text-muted py-4"><i class="bi bi-inbox me-2"></i>Loading payments...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header bg-gradient" style="background: linear-gradient(135deg, #56ab2f 0%, #a8e063 100%); color: white;">
+                <h5 class="mb-0"><i class="bi bi-check-circle me-2"></i>Confirmed Payments (Paid)</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <caption class="table-title text-muted">Confirmed Payments</caption>
+                        <thead class="table-light">
+                            <tr>
+                                <th>Booking ID</th>
+                                <th>Client</th>
+                                <th>Amount</th>
+                                <th>Payment Method</th>
+                                <th>Paid On</th>
+                            </tr>
+                        </thead>
+                        <tbody id="confirmedPaymentsTable">
+                            <tr><td colspan="5" class="text-center text-muted py-4"><i class="bi bi-inbox me-2"></i>No confirmed payments yet</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `,
+
     sales: `
         <div class="row mb-4">
             <div class="col-md-3 mb-3">
@@ -1204,6 +1314,7 @@ function loadPage(pageName) {
         clients: 'Clients',
         packages: 'Packages',
         services: 'Services',
+        payments: 'Pending Payments',
         sales: 'Sales & Payments',
         reports: 'Reports',
         notifications: 'Notifications'
@@ -1235,6 +1346,9 @@ function loadPage(pageName) {
             break;
         case 'services':
             loadServicesData();
+            break;
+        case 'payments':
+            loadPaymentsData();
             break;
         case 'sales':
             loadSalesData();
@@ -1396,11 +1510,19 @@ function displayBookings(bookings) {
     const tbody = document.getElementById('bookingsTable');
     
     if (!bookings || bookings.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No bookings found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">No bookings found</td></tr>';
         return;
     }
 
-    tbody.innerHTML = bookings.map(booking => `
+    tbody.innerHTML = bookings.map(booking => {
+        // Determine payment status badge color
+        let paymentBadgeClass = 'bg-secondary';
+        if (booking.PaymentStatus === 'Pending Payment') paymentBadgeClass = 'bg-warning';
+        else if (booking.PaymentStatus === 'Processing') paymentBadgeClass = 'bg-info';
+        else if (booking.PaymentStatus === 'Paid') paymentBadgeClass = 'bg-success';
+        else if (booking.PaymentStatus === 'Failed') paymentBadgeClass = 'bg-danger';
+        
+        return `
         <tr>
             <td>#${booking.BookingID}</td>
             <td>${booking.ClientName || 'N/A'}</td>
@@ -1408,13 +1530,15 @@ function displayBookings(bookings) {
             <td>${booking.EventDate}</td>
             <td>${booking.NumberOfGuests}</td>
             <td><span class="badge badge-${booking.Status.toLowerCase()}">${booking.Status}</span></td>
+            <td><span class="badge ${paymentBadgeClass}">${booking.PaymentStatus || 'Pending Payment'}</span></td>
             <td>₱${parseFloat(booking.TotalAmount || 0).toLocaleString()}</td>
             <td>
                 <button class="btn btn-sm btn-outline-dark" onclick="viewBookingDetails(${booking.BookingID})" title="View Details"><i class="bi bi-eye"></i></button>
                 <button class="btn btn-sm btn-outline-dark" onclick="editBookingDetails(${booking.BookingID})" title="Edit Booking"><i class="bi bi-pencil"></i></button>
             </td>
         </tr>
-    `).join('');
+        `;
+    }).join('');
 }
 
 function filterBookings() {
@@ -1445,7 +1569,8 @@ async function loadQuotationsData() {
 
         const tbody = document.getElementById('quotationsTable');
         
-        if (data.success && data.data.quotations.length > 0) {
+        // Better error checking
+        if (data.success && data.data && data.data.quotations && data.data.quotations.length > 0) {
             tbody.innerHTML = data.data.quotations.map(quote => `
                 <tr>
                     <td>#Q${quote.QuotationID}</td>
@@ -1461,12 +1586,16 @@ async function loadQuotationsData() {
                 </tr>
             `).join('');
         } else {
-            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No quotations found</td></tr>';
+            const errorMsg = data.success === false ? data.message : 'No quotations found';
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted">${errorMsg}</td></tr>`;
+            if (!data.success) {
+                console.error('API Error:', data.message);
+            }
         }
     } catch (error) {
         console.error('Error loading quotations:', error);
         document.getElementById('quotationsTable').innerHTML = 
-            '<tr><td colspan="7" class="text-center text-danger">Failed to load quotations</td></tr>';
+            '<tr><td colspan="7" class="text-center text-danger">Failed to load quotations: ' + error.message + '</td></tr>';
     }
 }
 
@@ -2005,6 +2134,186 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
+// ===== PAYMENTS DATA =====
+async function loadPaymentsData() {
+    try {
+        // Fetch both pending and all bookings data
+        const [pendingRes, allBookingsRes] = await Promise.all([
+            fetch(API_BASE + 'bookings/index.php?pending=true', { 
+                credentials: 'include',
+                method: 'GET'
+            }),
+            fetch(API_BASE + 'bookings/index.php?limit=1000', { 
+                credentials: 'include',
+                method: 'GET'
+            })
+        ]);
+
+        const pendingData = await pendingRes.json();
+        const allBookingsData = await allBookingsRes.json();
+
+        if (pendingData.success) {
+            const pendingPayments = pendingData.data.payments || [];
+            document.getElementById('pendingPaymentCount').textContent = pendingPayments.length;
+            displayPendingPayments(pendingPayments);
+        } else {
+            document.getElementById('pendingPaymentsTable').innerHTML = 
+                '<tr><td colspan="7" class="text-center text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Error loading pending payments</td></tr>';
+        }
+
+        // Display confirmed (paid) payments
+        if (allBookingsData.success) {
+            const allBookings = allBookingsData.data.bookings || [];
+            const paidPayments = allBookings.filter(b => b.PaymentStatus === 'Paid');
+            document.getElementById('confirmedPaymentCount').textContent = paidPayments.length;
+            displayConfirmedPayments(paidPayments);
+        } else {
+            document.getElementById('confirmedPaymentsTable').innerHTML = 
+                '<tr><td colspan="5" class="text-center text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Error loading confirmed payments</td></tr>';
+        }
+    } catch (error) {
+        console.error('Error loading payments:', error);
+        document.getElementById('pendingPaymentsTable').innerHTML = 
+            '<tr><td colspan="7" class="text-center text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Failed to load payments</td></tr>';
+        document.getElementById('confirmedPaymentsTable').innerHTML = 
+            '<tr><td colspan="5" class="text-center text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Failed to load confirmed payments</td></tr>';
+    }
+}
+
+function displayPendingPayments(payments) {
+    const tbody = document.getElementById('pendingPaymentsTable');
+    
+    if (!payments || payments.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4"><i class="bi bi-inbox me-2"></i>No pending payments</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = payments.map(payment => {
+        const eventDate = new Date(payment.EventDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const selectedDate = new Date(payment.CreatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        
+        let methodBadgeStyle = 'background-color: #0d6efd; color: white;';
+        let methodIcon = '';
+        if (payment.PaymentMethod === 'GCash') {
+            methodIcon = '<i class="bi bi-phone-fill me-1"></i>';
+            methodBadgeStyle = 'background-color: #0d6efd; color: white;';
+        } else if (payment.PaymentMethod === 'Cash') {
+            methodIcon = '<i class="bi bi-cash-stack me-1"></i>';
+            methodBadgeStyle = 'background-color: #198754; color: white;';
+        } else if (payment.PaymentMethod === 'Bank Transfer') {
+            methodIcon = '<i class="bi bi-bank me-1"></i>';
+            methodBadgeStyle = 'background-color: #6f42c1; color: white;';
+        }
+        
+        return `
+        <tr class="align-middle">
+            <td><span class="badge bg-light text-dark"><strong>#${payment.BookingID}</strong></span></td>
+            <td>
+                <div class="fw-semibold">${payment.ClientName}</div>
+                <small class="text-muted">${payment.ClientEmail}</small>
+            </td>
+            <td>${eventDate}</td>
+            <td><span class="fw-bold text-success">₱${parseFloat(payment.TotalAmount).toLocaleString('en-PH', {minimumFractionDigits: 2})}</span></td>
+            <td><span class="payment-badge" style="${methodBadgeStyle}">${methodIcon}${payment.PaymentMethod}</span></td>
+            <td><span class="text-muted">${selectedDate}</span></td>
+            <td class="text-center">
+                <button class="btn btn-sm btn-success rounded-pill px-3" onclick="confirmPayment(${payment.BookingID})" title="Confirm Payment">
+                    <i class="bi bi-check2-circle me-1"></i><span class="d-none d-md-inline">Confirm</span>
+                </button>
+            </td>
+        </tr>
+        `;
+    }).join('');
+}
+
+function displayConfirmedPayments(payments) {
+    const tbody = document.getElementById('confirmedPaymentsTable');
+    
+    if (!payments || payments.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4"><i class="bi bi-inbox me-2"></i>No confirmed payments yet</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = payments.map(payment => {
+        const paidDate = payment.PaymentDate ? new Date(payment.PaymentDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
+        
+        let methodBadgeStyle = 'background-color: #0d6efd; color: white;';
+        let methodIcon = '';
+        if (payment.PaymentMethod === 'GCash') {
+            methodIcon = '<i class="bi bi-phone-fill me-1"></i>';
+            methodBadgeStyle = 'background-color: #0d6efd; color: white;';
+        } else if (payment.PaymentMethod === 'Cash') {
+            methodIcon = '<i class="bi bi-cash-stack me-1"></i>';
+            methodBadgeStyle = 'background-color: #198754; color: white;';
+        } else if (payment.PaymentMethod === 'Bank Transfer') {
+            methodIcon = '<i class="bi bi-bank me-1"></i>';
+            methodBadgeStyle = 'background-color: #6f42c1; color: white;';
+        }
+        
+        return `
+        <tr class="align-middle">
+            <td><span class="badge bg-light text-dark"><strong>#${payment.BookingID}</strong></span></td>
+            <td class="fw-semibold">${payment.ClientName}</td>
+            <td><span class="fw-bold text-success">₱${parseFloat(payment.TotalAmount).toLocaleString('en-PH', {minimumFractionDigits: 2})}</span></td>
+            <td><span class="payment-badge" style="${methodBadgeStyle}">${methodIcon}${payment.PaymentMethod}</span></td>
+            <td><span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>${paidDate}</span></td>
+        </tr>
+        `;
+    }).join('');
+}
+
+function filterPayments() {
+    const searchInput = document.getElementById('searchPayments').value.toLowerCase();
+    const methodFilter = document.getElementById('filterPaymentMethod').value;
+    const table = document.getElementById('pendingPaymentsTable');
+    const rows = table.getElementsByTagName('tr');
+    
+    Array.from(rows).forEach(row => {
+        const bookingId = row.cells[0]?.textContent.toLowerCase() || '';
+        const clientName = row.cells[1]?.textContent.toLowerCase() || '';
+        const method = row.cells[4]?.textContent.toLowerCase() || '';
+        
+        const matchesSearch = bookingId.includes(searchInput) || clientName.includes(searchInput);
+        const matchesMethod = !methodFilter || method.includes(methodFilter.toLowerCase());
+        
+        row.style.display = (matchesSearch && matchesMethod) ? '' : 'none';
+    });
+}
+
+function confirmPayment(bookingId) {
+    if (!confirm(`Confirm payment for Booking #${bookingId}?`)) {
+        return;
+    }
+    
+    const data = {
+        booking_id: bookingId
+    };
+    
+    fetch(API_BASE + 'bookings/index.php?action=confirm_payment', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✓ Payment confirmed successfully!');
+            loadPaymentsData(); // Refresh the pending payments list
+            document.getElementById('pageContent').innerHTML = pages['payments'];
+            loadPaymentsData();
+        } else {
+            alert('Error: ' + (data.message || 'Failed to confirm payment'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error confirming payment');
+    });
+}
+
 // ===== SALES DATA =====
 async function loadSalesData() {
     try {
@@ -2408,7 +2717,7 @@ async function updateBooking() {
         const result = await response.json();
 
         if (result.success) {
-            alert('Booking updated successfully!');
+            showToast('success', 'Booking updated successfully!');
             
             // Close modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('viewEditBookingModal'));
@@ -2422,11 +2731,11 @@ async function updateBooking() {
                 loadDashboardData();
             }
         } else {
-            alert('Error updating booking: ' + result.message);
+            showToast('error', 'Error updating booking: ' + result.message);
         }
     } catch (error) {
         console.error('Error updating booking:', error);
-        alert('Failed to update booking. Please try again.');
+        showToast('error', 'Failed to update booking. Please try again.');
     }
 }
 
@@ -2540,12 +2849,45 @@ function displayQuotationDetails(quotation) {
             <!-- Pricing Information -->
             <div class="card border-dark">
                 <div class="card-header bg-dark text-white">
-                    <h6 class="mb-0"><i class="bi bi-cash-coin me-2"></i>Estimated Price</h6>
+                    <h6 class="mb-0"><i class="bi bi-cash-coin me-2"></i>Pricing Breakdown</h6>
                 </div>
                 <div class="card-body">
+                    <div class="mb-3 pb-3 border-bottom">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span><strong>Base Price:</strong></span>
+                            <span class="fs-5">₱${parseFloat(quotation.EstimatedPrice || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                        </div>
+                        
+                        <!-- Special Request Items -->
+                        ${quotation.SpecialRequestItems ? `
+                            <div id="specialRequestItemsDisplay">
+                                ${(() => {
+                                    try {
+                                        const items = JSON.parse(quotation.SpecialRequestItems);
+                                        if (items.length > 0) {
+                                            return items.map(item => `
+                                                <div class="d-flex justify-content-between align-items-center mb-2" style="margin-left: 10px;">
+                                                    <span style="font-size: 0.9rem;">• ${item.name}:</span>
+                                                    <span class="fs-6">₱${parseFloat(item.price).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                                                </div>
+                                            `).join('');
+                                        }
+                                        return '';
+                                    } catch (e) {
+                                        return '';
+                                    }
+                                })()}
+                            </div>
+                        ` : ''}
+                        
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span><strong>Special Request Total:</strong></span>
+                            <span class="fs-5">₱${parseFloat(quotation.SpecialRequestPrice || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                        </div>
+                    </div>
                     <div class="d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">Total Estimate:</h5>
-                        <h3 class="mb-0 text-primary">₱${parseFloat(quotation.EstimatedPrice || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</h3>
+                        <h5 class="mb-0"><strong>Total Price:</strong></h5>
+                        <h3 class="mb-0 text-primary">₱${(parseFloat(quotation.EstimatedPrice || 0) + parseFloat(quotation.SpecialRequestPrice || 0)).toLocaleString(undefined, {minimumFractionDigits: 2})}</h3>
                     </div>
                 </div>
             </div>
@@ -2554,6 +2896,9 @@ function displayQuotationDetails(quotation) {
         <div class="modal-footer mt-3">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
             ${quotation.Status === 'Pending' ? `
+                <button type="button" class="btn btn-info" onclick="manageSpecialRequests(${quotation.QuotationID})">
+                    <i class="bi bi-plus-circle me-1"></i>Special Requests
+                </button>
                 <button type="button" class="btn btn-success" onclick="approveQuotation(${quotation.QuotationID}); bootstrap.Modal.getInstance(document.getElementById('viewEditBookingModal')).hide();">
                     <i class="bi bi-check-circle me-1"></i>Approve
                 </button>
@@ -2582,16 +2927,280 @@ async function approveQuotation(id) {
             const data = await response.json();
             
             if (data.success) {
-                alert('Quotation approved successfully!');
+                showToast('success', 'Quotation approved successfully!');
                 loadQuotationsData();
             } else {
-                alert('Error: ' + data.message);
+                showToast('error', 'Error: ' + data.message);
             }
         } catch (error) {
             console.error('Error approving quotation:', error);
-            alert('Failed to approve quotation');
+            showToast('error', 'Failed to approve quotation');
         }
     }
+}
+
+async function rejectQuotation(id) {
+    if (confirm('Reject this quotation?')) {
+        try {
+            const response = await fetch(API_BASE + 'quotations/index.php', {
+                method: 'PUT',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    quotation_id: id,
+                    status: 'Rejected'
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                showToast('success', 'Quotation rejected successfully!');
+                loadQuotationsData();
+            } else {
+                showToast('error', 'Error: ' + data.message);
+            }
+        } catch (error) {
+            console.error('Error rejecting quotation:', error);
+            showToast('error', 'Failed to reject quotation');
+        }
+    }
+}
+
+// Edit quotation special request price
+function editQuotationPrice(quotationID) {
+    // Close current modal
+    const currentModal = bootstrap.Modal.getInstance(document.getElementById('viewEditBookingModal'));
+    if (currentModal) {
+        currentModal.hide();
+    }
+    
+    // Show price edit modal
+    const modal = new bootstrap.Modal(document.getElementById('editQuotationPriceModal'));
+    document.getElementById('editQuotationPriceID').value = quotationID;
+    
+    // Fetch current quotation data
+    fetch(API_BASE + 'quotations/index.php?id=' + quotationID, {
+        method: 'GET',
+        credentials: 'include'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.data.quotations && data.data.quotations.length > 0) {
+            const quotation = data.data.quotations[0];
+            document.getElementById('editQuotationBasePrice').value = quotation.EstimatedPrice || 0;
+            document.getElementById('editQuotationSpecialRequestPrice').value = quotation.SpecialRequestPrice || 0;
+            document.getElementById('editQuotationTotalPrice').textContent = 
+                '₱' + (parseFloat(quotation.EstimatedPrice || 0) + parseFloat(quotation.SpecialRequestPrice || 0))
+                    .toLocaleString(undefined, {minimumFractionDigits: 2});
+            modal.show();
+        }
+    })
+    .catch(error => {
+        console.error('Error loading quotation:', error);
+        showToast('error', 'Failed to load quotation data');
+    });
+}
+
+// Open special request items manager
+function manageSpecialRequests(quotationID) {
+    // Close current modal
+    const currentModal = bootstrap.Modal.getInstance(document.getElementById('viewEditBookingModal'));
+    if (currentModal) {
+        currentModal.hide();
+    }
+    
+    // Show special requests modal
+    const modal = new bootstrap.Modal(document.getElementById('specialRequestsModal'));
+    document.getElementById('specialRequestsQuotationID').value = quotationID;
+    document.getElementById('specialRequestsItemsList').innerHTML = '';
+    
+    // Fetch current quotation data
+    fetch(API_BASE + 'quotations/index.php?id=' + quotationID, {
+        method: 'GET',
+        credentials: 'include'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.data.quotations && data.data.quotations.length > 0) {
+            const quotation = data.data.quotations[0];
+            document.getElementById('basePrice').textContent = 
+                '₱' + parseFloat(quotation.EstimatedPrice || 0).toLocaleString(undefined, {minimumFractionDigits: 2});
+            document.getElementById('specialRequestsTotal').textContent = 
+                '₱' + parseFloat(quotation.SpecialRequestPrice || 0).toLocaleString(undefined, {minimumFractionDigits: 2});
+            
+            // Load existing special request items if they exist
+            if (quotation.SpecialRequestItems) {
+                try {
+                    const items = JSON.parse(quotation.SpecialRequestItems);
+                    if (items.length > 0) {
+                        items.forEach(item => {
+                            addSpecialRequestItem(item.name, item.price);
+                        });
+                    }
+                } catch (e) {
+                    console.error('Error parsing special request items:', e);
+                }
+            }
+            
+            modal.show();
+        }
+    })
+    .catch(error => {
+        console.error('Error loading quotation:', error);
+        showToast('error', 'Failed to load quotation data');
+    });
+}
+
+// Add special request item row
+function addSpecialRequestItem(itemName = '', itemPrice = '') {
+    const container = document.getElementById('specialRequestsItemsList');
+    const itemCount = container.children.length;
+    
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'mb-3 p-3 border rounded special-request-item';
+    itemDiv.innerHTML = `
+        <div class="row">
+            <div class="col-md-7 mb-2">
+                <label class="form-label">Item Name</label>
+                <input type="text" class="form-control item-name" placeholder="e.g., Extra Dessert, Premium Bar Setup" value="${itemName}">
+            </div>
+            <div class="col-md-3 mb-2">
+                <label class="form-label">Price (₱)</label>
+                <input type="number" class="form-control item-price" placeholder="0.00" step="0.01" min="0" value="${itemPrice}" onchange="recalculateSpecialRequestsTotal()">
+            </div>
+            <div class="col-md-2 mb-2 d-flex align-items-end">
+                <button type="button" class="btn btn-sm btn-danger w-100" onclick="removeSpecialRequestItem(this)">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        </div>
+    `;
+    
+    container.appendChild(itemDiv);
+}
+
+// Remove special request item row
+function removeSpecialRequestItem(btn) {
+    btn.closest('.special-request-item').remove();
+    recalculateSpecialRequestsTotal();
+}
+
+// Recalculate total special requests price
+function recalculateSpecialRequestsTotal() {
+    const items = document.querySelectorAll('.special-request-item .item-price');
+    let total = 0;
+    
+    items.forEach(input => {
+        total += parseFloat(input.value) || 0;
+    });
+    
+    document.getElementById('specialRequestsTotal').textContent = 
+        '₱' + total.toLocaleString(undefined, {minimumFractionDigits: 2});
+}
+
+// Save special request items
+async function saveSpecialRequests() {
+    const quotationID = document.getElementById('specialRequestsQuotationID').value;
+    const itemElements = document.querySelectorAll('.special-request-item');
+    
+    if (itemElements.length === 0) {
+        showToast('error', 'Please add at least one special request item');
+        return;
+    }
+    
+    const items = [];
+    let totalPrice = 0;
+    
+    itemElements.forEach(element => {
+        const name = element.querySelector('.item-name').value.trim();
+        const price = parseFloat(element.querySelector('.item-price').value) || 0;
+        
+        if (!name) {
+            showToast('error', 'All items must have a name');
+            return;
+        }
+        
+        if (price < 0) {
+            showToast('error', 'Prices cannot be negative');
+            return;
+        }
+        
+        items.push({ name, price });
+        totalPrice += price;
+    });
+    
+    try {
+        const response = await fetch(API_BASE + 'quotations/index.php', {
+            method: 'PUT',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                quotation_id: quotationID,
+                special_request_price: totalPrice,
+                special_request_items: items
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('success', 'Special request items saved successfully!');
+            bootstrap.Modal.getInstance(document.getElementById('specialRequestsModal')).hide();
+            loadQuotationsData();
+        } else {
+            showToast('error', 'Error: ' + data.message);
+        }
+    } catch (error) {
+        console.error('Error saving special requests:', error);
+        showToast('error', 'Failed to save special request items');
+    }
+}
+
+// Update special request price
+async function updateQuotationPrice() {
+    const quotationID = document.getElementById('editQuotationPriceID').value;
+    const specialRequestPrice = parseFloat(document.getElementById('editQuotationSpecialRequestPrice').value) || 0;
+    
+    if (specialRequestPrice < 0) {
+        showToast('error', 'Special request price cannot be negative');
+        return;
+    }
+    
+    try {
+        const response = await fetch(API_BASE + 'quotations/index.php', {
+            method: 'PUT',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                quotation_id: quotationID,
+                special_request_price: specialRequestPrice
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('success', 'Special request price updated successfully!');
+            bootstrap.Modal.getInstance(document.getElementById('editQuotationPriceModal')).hide();
+            loadQuotationsData();
+        } else {
+            showToast('error', 'Error: ' + data.message);
+        }
+    } catch (error) {
+        console.error('Error updating quotation price:', error);
+        showToast('error', 'Failed to update special request price');
+    }
+}
+
+// Update total display when special request price changes
+function updateQuotationPriceDisplay() {
+    const basePrice = parseFloat(document.getElementById('editQuotationBasePrice').value) || 0;
+    const specialRequestPrice = parseFloat(document.getElementById('editQuotationSpecialRequestPrice').value) || 0;
+    const total = basePrice + specialRequestPrice;
+    
+    document.getElementById('editQuotationTotalPrice').textContent = 
+        '₱' + total.toLocaleString(undefined, {minimumFractionDigits: 2});
 }
 
 // ===== EDIT MENU =====

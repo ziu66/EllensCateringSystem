@@ -34,6 +34,12 @@ if (!$conn) {
 // Get request method
 $method = $_SERVER['REQUEST_METHOD'];
 
+// Handle special actions
+if ($method === 'POST' && isset($_GET['action']) && $_GET['action'] === 'update_items') {
+    handleSpecialRequestItems($conn);
+    exit;
+}
+
 // Route to appropriate handler
 switch ($method) {
     case 'GET':
@@ -71,6 +77,9 @@ function handleGetQuotations($conn) {
                     q.AdminID,
                     q.SpecialRequest,
                     q.EstimatedPrice,
+                    q.SpecialRequestPrice,
+                    q.SpecialRequestItems,
+                    (q.EstimatedPrice + IFNULL(q.SpecialRequestPrice, 0)) as TotalPrice,
                     q.Status,
                     b.ClientID,
                     c.Name as ClientName,
@@ -311,6 +320,8 @@ function handleUpdateQuotation($conn) {
         $allowedFields = [
             'special_request' => 'SpecialRequest',
             'estimated_price' => 'EstimatedPrice',
+            'special_request_price' => 'SpecialRequestPrice',
+            'special_request_items' => 'SpecialRequestItems',
             'status' => 'Status'
         ];
         
@@ -321,8 +332,21 @@ function handleUpdateQuotation($conn) {
                     sendResponse(false, 'Invalid status value', null, 400);
                 }
                 
-                $updateFields[] = "$dbField = :$dataKey";
-                $params[":$dataKey"] = $data[$dataKey];
+                // Validate numeric fields
+                if (in_array($dataKey, ['estimated_price', 'special_request_price'])) {
+                    if (!is_numeric($data[$dataKey]) || (float)$data[$dataKey] < 0) {
+                        sendResponse(false, 'Price fields must be valid positive numbers', null, 400);
+                    }
+                }
+                
+                // Convert special_request_items to JSON if it's an array
+                if ($dataKey === 'special_request_items' && is_array($data[$dataKey])) {
+                    $updateFields[] = "$dbField = :$dataKey";
+                    $params[":$dataKey"] = json_encode($data[$dataKey]);
+                } else {
+                    $updateFields[] = "$dbField = :$dataKey";
+                    $params[":$dataKey"] = $data[$dataKey];
+                }
             }
         }
         
@@ -333,13 +357,46 @@ function handleUpdateQuotation($conn) {
         $query = "UPDATE quotation SET " . implode(', ', $updateFields) . " WHERE QuotationID = :quotationID";
         $stmt = $conn->prepare($query);
         $stmt->execute($params);
+
+        // Get the updated quotation to calculate total
+        $getQuotation = "SELECT EstimatedPrice, SpecialRequestPrice, BookingID FROM quotation WHERE QuotationID = :quotationID";
+        $stmtGet = $conn->prepare($getQuotation);
+        $stmtGet->execute([':quotationID' => $quotationID]);
+        $quotationData = $stmtGet->fetch();
         
+        if ($quotationData) {
+            $totalPrice = (float)$quotationData['EstimatedPrice'] + (float)($quotationData['SpecialRequestPrice'] ?? 0);
+            $bookingID = $quotationData['BookingID'];
+            
+            // Update booking total amount
+            $updateBookingAmount = "UPDATE booking SET TotalAmount = :totalAmount WHERE BookingID = :bookingID";
+            $stmtUpdate = $conn->prepare($updateBookingAmount);
+            $stmtUpdate->execute([
+                ':totalAmount' => $totalPrice,
+                ':bookingID' => $bookingID
+            ]);
+        }
+
         // If status is changed to Approved, update booking status to Confirmed
         if (isset($data['status']) && $data['status'] === 'Approved') {
             $updateBooking = "UPDATE booking b 
-                             INNER JOIN quotation q ON b.BookingID = q.BookingID 
-                             SET b.Status = 'Confirmed' 
-                             WHERE q.QuotationID = :quotationID";
+                            INNER JOIN quotation q ON b.BookingID = q.BookingID 
+                            SET b.Status = 'Confirmed' 
+                            WHERE q.QuotationID = :quotationID";
+            $stmt = $conn->prepare($updateBooking);
+            $stmt->execute([':quotationID' => $quotationID]);
+            
+            // Log the auto-confirmation
+            logActivity($conn, getCurrentAdminId(), 'admin', 'booking_auto_confirmed', 
+                    "Auto-confirmed booking when quotation #$quotationID was approved", $_SERVER['REMOTE_ADDR']);
+        }
+
+        // If status is changed to Rejected, update booking status to Cancelled
+        if (isset($data['status']) && $data['status'] === 'Rejected') {
+            $updateBooking = "UPDATE booking b 
+                            INNER JOIN quotation q ON b.BookingID = q.BookingID 
+                            SET b.Status = 'Cancelled' 
+                            WHERE q.QuotationID = :quotationID";
             $stmt = $conn->prepare($updateBooking);
             $stmt->execute([':quotationID' => $quotationID]);
         }
@@ -352,6 +409,98 @@ function handleUpdateQuotation($conn) {
     } catch (PDOException $e) {
         error_log("Update Quotation Error: " . $e->getMessage());
         sendResponse(false, 'Error updating quotation', null, 500);
+    }
+}
+
+/**
+ * Handle special request items for dynamic pricing
+ */
+function handleSpecialRequestItems($conn) {
+    try {
+        $data = json_decode(file_get_contents("php://input"), true);
+        
+        if (!isset($data['quotation_id']) || empty($data['quotation_id'])) {
+            sendResponse(false, 'Quotation ID is required', null, 400);
+        }
+        
+        $quotationID = (int)$data['quotation_id'];
+        $items = $data['items'] ?? [];
+        
+        // Verify quotation exists
+        $checkQuery = "SELECT q.QuotationID, q.BookingID, q.EstimatedPrice 
+                       FROM quotation q 
+                       WHERE q.QuotationID = :quotationID LIMIT 1";
+        $stmt = $conn->prepare($checkQuery);
+        $stmt->execute([':quotationID' => $quotationID]);
+        
+        if ($stmt->rowCount() === 0) {
+            sendResponse(false, 'Quotation not found', null, 404);
+        }
+        
+        $quotation = $stmt->fetch();
+        $bookingID = $quotation['BookingID'];
+        $basePrice = (float)$quotation['EstimatedPrice'];
+        
+        // Calculate total from items
+        $itemsTotal = 0;
+        foreach ($items as $item) {
+            if (isset($item['price'])) {
+                $itemsTotal += (float)$item['price'];
+            }
+        }
+        
+        // New total = base price + items total
+        $newTotal = $basePrice + $itemsTotal;
+        
+        // Start transaction
+        $conn->beginTransaction();
+        
+        try {
+            // Update quotation with new total
+            $updateQuotation = "UPDATE quotation 
+                               SET EstimatedPrice = :newTotal 
+                               WHERE QuotationID = :quotationID";
+            $stmt = $conn->prepare($updateQuotation);
+            $stmt->execute([
+                ':newTotal' => $newTotal,
+                ':quotationID' => $quotationID
+            ]);
+            
+            // Update booking total amount
+            $updateBooking = "UPDATE booking 
+                             SET TotalAmount = :newTotal 
+                             WHERE BookingID = :bookingID";
+            $stmt = $conn->prepare($updateBooking);
+            $stmt->execute([
+                ':newTotal' => $newTotal,
+                ':bookingID' => $bookingID
+            ]);
+            
+            $conn->commit();
+            
+            // Log activity
+            logActivity($conn, getCurrentAdminId(), 'admin', 'quotation_price_updated', 
+                       "Updated quotation #$quotationID price to $$newTotal (Base: $$basePrice + Items: $$itemsTotal)", 
+                       $_SERVER['REMOTE_ADDR']);
+            
+            sendResponse(true, 'Quotation price updated successfully', [
+                'quotation_id' => $quotationID,
+                'base_price' => $basePrice,
+                'items_total' => $itemsTotal,
+                'new_total' => $newTotal
+            ], 200);
+            
+        } catch (PDOException $e) {
+            $conn->rollBack();
+            throw $e;
+        }
+        
+    } catch (PDOException $e) {
+        if ($conn->inTransaction()) {
+            $conn->rollBack();
+        }
+        error_log("Update Special Request Items Error: " . $e->getMessage());
+        sendResponse(false, 'Error updating special request items', null, 500);
     }
 }
 

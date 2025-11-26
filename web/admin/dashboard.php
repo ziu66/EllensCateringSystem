@@ -70,6 +70,12 @@ $adminId = $_SESSION['admin_id'] ?? 0;
     </a>
 </li>
                 <li class="nav-item">
+                    <a class="nav-link" href="#" data-page="payments">
+                        <i class="bi bi-credit-card"></i>
+                        <span>Payments</span>
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link" href="#" data-page="sales">
                         <i class="bi bi-cash-coin"></i>
                         <span>Sales & Payments</span>
@@ -325,6 +331,103 @@ $adminId = $_SESSION['admin_id'] ?? 0;
                 </div>
                 <div class="modal-body" id="viewEditBookingContent">
                     <!-- Content will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Quotation Price Modal -->
+    <div class="modal fade" id="editQuotationPriceModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title">Edit Quotation Pricing</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="editQuotationPriceID">
+                    
+                    <div class="mb-3">
+                        <label class="form-label"><strong>Base Price (₱)</strong></label>
+                        <input type="number" id="editQuotationBasePrice" class="form-control" disabled placeholder="Base price">
+                        <small class="text-muted">Base price from package/menu selection (read-only)</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label"><strong>Special Request Price (₱)</strong></label>
+                        <input type="number" 
+                               id="editQuotationSpecialRequestPrice" 
+                               class="form-control" 
+                               step="0.01" 
+                               min="0" 
+                               placeholder="Enter special request price"
+                               onchange="updateQuotationPriceDisplay()"
+                               oninput="updateQuotationPriceDisplay()">
+                        <small class="text-muted">Additional cost for customer's special requests</small>
+                    </div>
+                    
+                    <div class="alert alert-info mb-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <strong>Total Price:</strong>
+                            <h5 class="mb-0" id="editQuotationTotalPrice">₱0.00</h5>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-dark" onclick="updateQuotationPrice()">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Special Requests Manager Modal -->
+    <div class="modal fade" id="specialRequestsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Manage Special Requests</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="specialRequestsQuotationID">
+                    
+                    <!-- Pricing Summary -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="alert alert-secondary mb-0">
+                                <small class="text-muted d-block">Base Price</small>
+                                <h5 class="mb-0" id="basePrice">₱0.00</h5>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="alert alert-info mb-0">
+                                <small class="text-muted d-block">Special Requests Total</small>
+                                <h5 class="mb-0" id="specialRequestsTotal">₱0.00</h5>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Items List -->
+                    <label class="form-label"><strong>Special Request Items</strong></label>
+                    <div id="specialRequestsItemsList" class="mb-3">
+                        <!-- Items will be added here dynamically -->
+                    </div>
+                    
+                    <button type="button" class="btn btn-outline-dark w-100" onclick="addSpecialRequestItem()">
+                        <i class="bi bi-plus me-2"></i>Add Item
+                    </button>
+                    
+                    <div class="alert alert-light mt-3 p-2">
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Enter special request items with their prices. The total will be added to the base price.
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-dark" onclick="saveSpecialRequests()">Save & Update Price</button>
                 </div>
             </div>
         </div>

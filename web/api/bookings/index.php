@@ -21,8 +21,13 @@ header('Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers
 require_once '../../config/database.php';
 require_once '../middleware/auth.php';
 
-// Require authentication
-requireAuth();
+// Check if this is a customer payment method request (doesn't require admin auth)
+$isPaymentMethodRequest = ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action']) && $_GET['action'] === 'save_payment_method');
+
+// Only require admin authentication for non-payment-method requests
+if (!$isPaymentMethodRequest) {
+    requireAuth();
+}
 
 // Get database connection
 $conn = getDbConnection();
@@ -33,6 +38,19 @@ if (!$conn) {
 
 // Get request method
 $method = $_SERVER['REQUEST_METHOD'];
+
+// Handle POST method for special actions
+if ($method === 'POST' && isset($_GET['action'])) {
+    $action = $_GET['action'];
+    if ($action === 'save_payment_method') {
+        handleSavePaymentMethod($conn);
+    } elseif ($action === 'confirm_payment') {
+        handleConfirmPayment($conn);
+    } else {
+        sendResponse(false, 'Invalid action', null, 400);
+    }
+    exit;
+}
 
 // Handle PATCH method for cancel operation
 if ($method === 'PATCH') {
@@ -48,7 +66,12 @@ if ($method === 'PATCH') {
 // Route to appropriate handler
 switch ($method) {
     case 'GET':
-        handleGetBookings($conn);
+        // Check if requesting pending payments (admin only)
+        if (isset($_GET['pending']) && $_GET['pending'] === 'true') {
+            handleGetPendingPayments($conn);
+        } else {
+            handleGetBookings($conn);
+        }
         break;
     case 'POST':
         handleCreateBooking($conn);
@@ -61,6 +84,245 @@ switch ($method) {
         break;
     default:
         sendResponse(false, 'Method not allowed', null, 405);
+}
+
+/**
+ * POST: Confirm payment for a booking
+ * Admin only - Updates PaymentStatus to 'Paid' and sets PaymentDate
+ */
+function handleConfirmPayment($conn) {
+    try {
+        $data = json_decode(file_get_contents("php://input"), true);
+        
+        if (!isset($data['booking_id']) || empty($data['booking_id'])) {
+            sendResponse(false, 'Booking ID is required', null, 400);
+        }
+        
+        $bookingID = (int)$data['booking_id'];
+        
+        // Check if booking exists
+        $checkQuery = "SELECT BookingID, PaymentStatus, PaymentMethod FROM booking WHERE BookingID = :bookingID LIMIT 1";
+        $stmt = $conn->prepare($checkQuery);
+        $stmt->execute([':bookingID' => $bookingID]);
+        $booking = $stmt->fetch();
+        
+        if (!$booking) {
+            sendResponse(false, 'Booking not found', null, 404);
+        }
+        
+        // Check if payment method was selected
+        if (!$booking['PaymentMethod']) {
+            sendResponse(false, 'Payment method has not been selected by customer yet', null, 400);
+        }
+        
+        // Start transaction
+        $conn->beginTransaction();
+        
+        try {
+            // Update booking with paid status and date
+            $updateQuery = "UPDATE booking 
+                           SET PaymentStatus = 'Paid',
+                               PaymentDate = NOW()
+                           WHERE BookingID = :bookingID";
+            $stmt = $conn->prepare($updateQuery);
+            $stmt->execute([':bookingID' => $bookingID]);
+            
+            $conn->commit();
+            
+            // Log activity
+            logActivity($conn, getCurrentAdminId(), 'admin', 'payment_confirmed', 
+                       "Confirmed payment for booking #$bookingID via {$booking['PaymentMethod']}", $_SERVER['REMOTE_ADDR']);
+            
+            sendResponse(true, 'Payment confirmed successfully', [
+                'booking_id' => $bookingID,
+                'payment_status' => 'Paid',
+                'payment_date' => date('Y-m-d H:i:s')
+            ], 200);
+            
+        } catch (PDOException $e) {
+            $conn->rollBack();
+            throw $e;
+        }
+        
+    } catch (PDOException $e) {
+        if ($conn->inTransaction()) {
+            $conn->rollBack();
+        }
+        error_log("Confirm Payment Error: " . $e->getMessage());
+        sendResponse(false, 'Error confirming payment', null, 500);
+    }
+}
+
+/**
+ * GET: Retrieve pending payments for admin
+ * Returns bookings with PaymentStatus = 'Processing'
+ */
+function handleGetPendingPayments($conn) {
+    try {
+        // Get query parameters
+        $limit = $_GET['limit'] ?? 50;
+        $offset = $_GET['offset'] ?? 0;
+        $paymentMethod = $_GET['payment_method'] ?? null;
+        
+        // Base query for pending payments
+        $query = "SELECT 
+                    b.BookingID,
+                    b.ClientID,
+                    c.Name as ClientName,
+                    c.Email as ClientEmail,
+                    c.ContactNumber,
+                    b.EventType,
+                    b.EventDate,
+                    b.EventLocation,
+                    b.NumberOfGuests,
+                    b.Status as BookingStatus,
+                    b.TotalAmount,
+                    b.PaymentMethod,
+                    b.PaymentStatus,
+                    b.CreatedAt,
+                    q.QuotationID,
+                    q.Status as QuotationStatus
+                  FROM booking b
+                  LEFT JOIN client c ON b.ClientID = c.ClientID
+                  LEFT JOIN quotation q ON b.BookingID = q.BookingID
+                  WHERE b.PaymentStatus = 'Processing'
+                  AND b.Status = 'Confirmed'";
+        
+        $params = [];
+        
+        // Filter by payment method if specified
+        if ($paymentMethod && in_array($paymentMethod, ['Cash', 'GCash', 'Bank Transfer'])) {
+            $query .= " AND b.PaymentMethod = :paymentMethod";
+            $params[':paymentMethod'] = $paymentMethod;
+        }
+        
+        // Order by oldest first (first to be paid)
+        $query .= " ORDER BY b.CreatedAt ASC";
+        
+        // Add pagination
+        $query .= " LIMIT :limit OFFSET :offset";
+        
+        $stmt = $conn->prepare($query);
+        
+        // Bind parameters
+        foreach ($params as $key => $value) {
+            $stmt->bindValue($key, $value);
+        }
+        $stmt->bindValue(':limit', (int)$limit, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', (int)$offset, PDO::PARAM_INT);
+        
+        $stmt->execute();
+        $pendingPayments = $stmt->fetchAll();
+        
+        // Get total count for pagination
+        $countQuery = "SELECT COUNT(*) as total FROM booking b 
+                       WHERE b.PaymentStatus = 'Processing' AND b.Status = 'Confirmed'";
+        
+        $countParams = [];
+        if ($paymentMethod && in_array($paymentMethod, ['Cash', 'GCash', 'Bank Transfer'])) {
+            $countQuery .= " AND b.PaymentMethod = :paymentMethod";
+            $countParams[':paymentMethod'] = $paymentMethod;
+        }
+        
+        $stmtCount = $conn->prepare($countQuery);
+        foreach ($countParams as $key => $value) {
+            $stmtCount->bindValue($key, $value);
+        }
+        $stmtCount->execute();
+        $totalCount = $stmtCount->fetch()['total'] ?? 0;
+        
+        sendResponse(true, 'Pending payments retrieved successfully', [
+            'payments' => $pendingPayments,
+            'total' => $totalCount,
+            'limit' => (int)$limit,
+            'offset' => (int)$offset
+        ], 200);
+        
+    } catch (PDOException $e) {
+        error_log("Get Pending Payments Error: " . $e->getMessage());
+        sendResponse(false, 'Error retrieving pending payments', null, 500);
+    }
+}
+
+/**
+ * POST: Save payment method when customer selects payment option
+ * Sets PaymentStatus to 'Processing' and stores the payment method
+ * Does NOT require admin authentication
+ */
+function handleSavePaymentMethod($conn) {
+    try {
+        $data = json_decode(file_get_contents("php://input"), true);
+        
+        if (!isset($data['booking_id']) || empty($data['booking_id'])) {
+            sendResponse(false, 'Booking ID is required', null, 400);
+        }
+        
+        if (!isset($data['payment_method']) || empty($data['payment_method'])) {
+            sendResponse(false, 'Payment method is required', null, 400);
+        }
+        
+        if (!isset($data['client_id']) || empty($data['client_id'])) {
+            sendResponse(false, 'Client ID is required', null, 400);
+        }
+        
+        $bookingID = (int)$data['booking_id'];
+        $clientID = (int)$data['client_id'];
+        $paymentMethod = sanitizeInput($data['payment_method']);
+        
+        // Validate payment method
+        if (!in_array($paymentMethod, ['Cash', 'GCash', 'Bank Transfer'])) {
+            sendResponse(false, 'Invalid payment method', null, 400);
+        }
+        
+        // Check if booking exists AND belongs to the requesting client
+        $checkQuery = "SELECT BookingID, ClientID, Status FROM booking WHERE BookingID = :bookingID AND ClientID = :clientID LIMIT 1";
+        $stmt = $conn->prepare($checkQuery);
+        $stmt->execute([':bookingID' => $bookingID, ':clientID' => $clientID]);
+        $booking = $stmt->fetch();
+        
+        if (!$booking) {
+            sendResponse(false, 'Booking not found or you do not have permission to update it', null, 404);
+        }
+        
+        // Start transaction
+        $conn->beginTransaction();
+        
+        try {
+            // Update booking with payment method and status
+            $updateQuery = "UPDATE booking 
+                           SET PaymentMethod = :paymentMethod,
+                               PaymentStatus = 'Processing'
+                           WHERE BookingID = :bookingID";
+            $stmt = $conn->prepare($updateQuery);
+            $stmt->execute([
+                ':paymentMethod' => $paymentMethod,
+                ':bookingID' => $bookingID
+            ]);
+            
+            $conn->commit();
+            
+            // Log activity
+            logActivity($conn, $clientID, 'client', 'payment_method_selected', 
+                       "Selected payment method: $paymentMethod for booking #$bookingID", $_SERVER['REMOTE_ADDR']);
+            
+            sendResponse(true, 'Payment method saved successfully', [
+                'booking_id' => $bookingID,
+                'payment_method' => $paymentMethod,
+                'payment_status' => 'Processing'
+            ], 200);
+            
+        } catch (PDOException $e) {
+            $conn->rollBack();
+            throw $e;
+        }
+        
+    } catch (PDOException $e) {
+        if ($conn->inTransaction()) {
+            $conn->rollBack();
+        }
+        error_log("Save Payment Method Error: " . $e->getMessage());
+        sendResponse(false, 'Error saving payment method', null, 500);
+    }
 }
 
 /**
@@ -162,6 +424,9 @@ function handleGetBookings($conn) {
                     b.SpecialRequests,
                     b.Status,
                     b.TotalAmount,
+                    b.PaymentStatus,
+                    b.PaymentMethod,
+                    b.PaymentDate,
                     b.CreatedAt,
                     b.UpdatedAt
                   FROM booking b
@@ -374,6 +639,30 @@ function handleUpdateBooking($conn) {
         if (!$booking) {
             sendResponse(false, 'Booking not found', null, 404);
         }
+
+        // **NEW CODE - ADD THIS**
+        // If trying to confirm booking, check if quotation is approved first
+        if (isset($data['status']) && $data['status'] === 'Confirmed') {
+            $checkQuotation = "SELECT Status FROM quotation WHERE BookingID = :bookingID LIMIT 1";
+            $stmtCheck = $conn->prepare($checkQuotation);
+            $stmtCheck->execute([':bookingID' => $bookingID]);
+            $quotation = $stmtCheck->fetch();
+            
+            if (!$quotation) {
+                sendResponse(false, 'No quotation found for this booking. Please create a quotation first before confirming.', null, 400);
+            }
+            
+            if ($quotation['Status'] !== 'Approved') {
+                $statusMessages = [
+                    'Pending' => 'The quotation is still pending approval. Please approve the quotation first.',
+                    'Rejected' => 'The quotation has been rejected. Cannot confirm this booking.',
+                    'Cancelled' => 'The quotation has been cancelled. Cannot confirm this booking.'
+                ];
+                
+                $message = $statusMessages[$quotation['Status']] ?? 'Quotation status is ' . $quotation['Status'] . '. Only approved quotations can be confirmed.';
+                sendResponse(false, $message, null, 400);
+            }
+        }
         
         // Prevent updating cancelled bookings (except to reactivate)
         if ($booking['Status'] === 'Cancelled' && (!isset($data['status']) || $data['status'] === 'Cancelled')) {
@@ -405,16 +694,31 @@ function handleUpdateBooking($conn) {
             sendResponse(false, 'No fields to update', null, 400);
         }
         
-        $query = "UPDATE booking SET " . implode(', ', $updateFields) . " WHERE BookingID = :bookingID";
-        $stmt = $conn->prepare($query);
-        $stmt->execute($params);
+        // Start transaction
+        $conn->beginTransaction();
         
-        // Log activity
-        logActivity($conn, getCurrentAdminId(), 'admin', 'booking_updated', "Updated booking #$bookingID", $_SERVER['REMOTE_ADDR']);
-        
-        sendResponse(true, 'Booking updated successfully', null, 200);
+        try {
+            // Update booking
+            $query = "UPDATE booking SET " . implode(', ', $updateFields) . " WHERE BookingID = :bookingID";
+            $stmt = $conn->prepare($query);
+            $stmt->execute($params);
+            
+            $conn->commit();
+            
+            // Log activity
+            logActivity($conn, getCurrentAdminId(), 'admin', 'booking_updated', "Updated booking #$bookingID", $_SERVER['REMOTE_ADDR']);
+            
+            sendResponse(true, 'Booking updated successfully', null, 200);
+            
+        } catch (PDOException $e) {
+            $conn->rollBack();
+            throw $e;
+        }
         
     } catch (PDOException $e) {
+        if ($conn->inTransaction()) {
+            $conn->rollBack();
+        }
         error_log("Update Booking Error: " . $e->getMessage());
         sendResponse(false, 'Error updating booking', null, 500);
     }
@@ -432,7 +736,7 @@ function handleDeleteBooking($conn) {
         }
         
         $bookingID = (int)$data['booking_id'];
-        
+
         // Check if booking exists
         $checkQuery = "SELECT BookingID, Status FROM booking WHERE BookingID = :bookingID LIMIT 1";
         $stmt = $conn->prepare($checkQuery);

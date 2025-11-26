@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_payment_method
     $conn = getDB();
     
     // Verify booking belongs to client
-    $verifyStmt = $conn->prepare("SELECT BookingID, SpecialRequests, TotalAmount FROM booking WHERE BookingID = ? AND ClientID = ?");
+    $verifyStmt = $conn->prepare("SELECT BookingID FROM booking WHERE BookingID = ? AND ClientID = ?");
     $verifyStmt->bind_param("ii", $bookingID, $clientID);
     $verifyStmt->execute();
     $result = $verifyStmt->get_result();
@@ -32,69 +32,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_payment_method
         exit;
     }
     
-    $booking = $result->fetch_assoc();
     $verifyStmt->close();
     
-    // Update SpecialRequests with payment method
-    $currentRequests = $booking['SpecialRequests'];
+    // Call the API endpoint via cURL or file_get_contents to save payment method
+    $apiData = [
+        'booking_id' => $bookingID,
+        'payment_method' => $paymentMethod,
+        'client_id' => $clientID
+    ];
     
-    // Remove existing payment method line if present
-    $currentRequests = preg_replace('/Payment Method:.*?\n/i', '', $currentRequests);
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, "http://localhost/web/api/bookings/index.php?action=save_payment_method");
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($apiData));
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
     
-    // Build updated special requests
-    $updatedRequests = "Payment Method: $paymentMethod\n";
+    $apiResponse = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
     
-    // Handle Bank Transfer details
-    if ($paymentMethod === 'Bank Transfer') {
-        $cardNumber = sanitizeInput($_POST['card_number'] ?? '');
-        $cardholderName = sanitizeInput($_POST['cardholder_name'] ?? '');
-        
-        if (empty($cardNumber) || empty($cardholderName)) {
-            echo json_encode(['success' => false, 'message' => 'Please provide card details for bank transfer']);
-            exit;
+    if ($httpCode === 200 && $apiResponse) {
+        $apiResult = json_decode($apiResponse, true);
+        if ($apiResult['success']) {
+            // Store for GCash modal if needed
+            if ($paymentMethod === 'GCash') {
+                $_SESSION['show_gcash_modal'] = true;
+                $_SESSION['gcash_amount'] = $_POST['total_amount'] ?? 0;
+                $_SESSION['gcash_booking_id'] = $bookingID;
+            }
+            
+            echo json_encode([
+                'success' => true, 
+                'message' => 'Payment method updated successfully',
+                'show_gcash' => ($paymentMethod === 'GCash')
+            ]);
+        } else {
+            echo json_encode(['success' => false, 'message' => $apiResult['message'] ?? 'Failed to update payment method']);
         }
-        
-        $cardNumber = preg_replace('/\s+/', '', $cardNumber);
-        if (!preg_match('/^\d{16}$/', $cardNumber)) {
-            echo json_encode(['success' => false, 'message' => 'Please enter a valid 16-digit card number']);
-            exit;
-        }
-        
-        $updatedRequests .= "Bank Transfer Details:\n";
-        $updatedRequests .= "Cardholder: $cardholderName\n";
-        $updatedRequests .= "Card (last 4): " . substr($cardNumber, -4) . "\n";
-    }
-    
-    $updatedRequests .= "\n" . trim($currentRequests);
-    
-    // Update booking
-    $updateStmt = $conn->prepare("UPDATE booking SET SpecialRequests = ? WHERE BookingID = ? AND ClientID = ?");
-    $updateStmt->bind_param("sii", $updatedRequests, $bookingID, $clientID);
-    
-    if ($updateStmt->execute()) {
-        // Store for GCash modal if needed
-        if ($paymentMethod === 'GCash') {
-            $_SESSION['show_gcash_modal'] = true;
-            $_SESSION['gcash_amount'] = $booking['TotalAmount'];
-            $_SESSION['gcash_booking_id'] = $bookingID;
-        }
-        
-        if (function_exists('logActivity')) {
-            logActivity($clientID, 'client', 'payment_method_updated', "Updated payment method to $paymentMethod for booking #$bookingID");
-        }
-        
-        echo json_encode([
-            'success' => true, 
-            'message' => 'Payment method updated successfully',
-            'show_gcash' => ($paymentMethod === 'GCash'),
-            'total_amount' => $booking['TotalAmount'],
-            'booking_id' => $bookingID
-        ]);
     } else {
-        echo json_encode(['success' => false, 'message' => 'Failed to update payment method']);
+        echo json_encode(['success' => false, 'message' => 'Failed to save payment method. Please try again.']);
     }
     
-    $updateStmt->close();
     exit;
 }
 
@@ -106,18 +86,26 @@ $message = isset($_SESSION['booking_message']) ? $_SESSION['booking_message'] : 
 $messageType = isset($_SESSION['booking_message_type']) ? $_SESSION['booking_message_type'] : '';
 unset($_SESSION['booking_message'], $_SESSION['booking_message_type']);
 
-// Fetch all bookings for the client
+// Fetch all bookings for the client WITH QUOTATION DATA
 $bookingsQuery = "
     SELECT 
         b.*,
         p.PackageName,
         p.PackPrice,
+        q.QuotationID,
+        q.EstimatedPrice as QuotationPrice,
+        q.SpecialRequestPrice,
+        q.SpecialRequestItems,
+        (q.EstimatedPrice + IFNULL(q.SpecialRequestPrice, 0)) as TotalQuotationPrice,
+        q.Status as QuotationStatus,
+        q.SpecialRequest as QuotationDetails,
         GROUP_CONCAT(DISTINCT m.DishName SEPARATOR ', ') AS MenuItems
     FROM booking b
     LEFT JOIN booking_package bp ON b.BookingID = bp.BookingID
     LEFT JOIN package p ON bp.PackageID = p.PackageID
     LEFT JOIN booking_menu bm ON b.BookingID = bm.BookingID
     LEFT JOIN menu m ON bm.MenuID = m.MenuID
+    LEFT JOIN quotation q ON b.BookingID = q.BookingID
     WHERE b.ClientID = ?
     GROUP BY b.BookingID
     ORDER BY b.DateBooked DESC
@@ -128,6 +116,7 @@ $stmt->bind_param("i", $client_id);
 $stmt->execute();
 $bookings = $stmt->get_result();
 $stmt->close();
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -703,6 +692,58 @@ $stmt->close();
                             <span>Total Amount:</span>
                             <span>₱<?= number_format($booking['TotalAmount'], 2) ?></span>
                         </div>
+                        
+                        <!-- Payment Status Section -->
+                        <?php if ($booking['PaymentStatus']): ?>
+                            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border-gray);">
+                                <div class="detail-row">
+                                    <span class="detail-label">
+                                        <i class="bi bi-wallet2 me-1"></i>Payment Status:
+                                    </span>
+                                    <span class="detail-value">
+                                        <?php 
+                                        $paymentStatusClasses = [
+                                            'Pending Payment' => 'badge bg-warning text-dark',
+                                            'Processing' => 'badge bg-info',
+                                            'Paid' => 'badge bg-success',
+                                            'Failed' => 'badge bg-danger'
+                                        ];
+                                        $statusClass = $paymentStatusClasses[$booking['PaymentStatus']] ?? 'badge bg-secondary';
+                                        ?>
+                                        <span class="<?= $statusClass ?>" style="font-size: 0.9rem; padding: 6px 12px;">
+                                            <?php if ($booking['PaymentStatus'] === 'Paid'): ?>
+                                                <i class="bi bi-check-circle me-1"></i>
+                                            <?php elseif ($booking['PaymentStatus'] === 'Processing'): ?>
+                                                <i class="bi bi-hourglass-split me-1"></i>
+                                            <?php elseif ($booking['PaymentStatus'] === 'Failed'): ?>
+                                                <i class="bi bi-exclamation-circle me-1"></i>
+                                            <?php else: ?>
+                                                <i class="bi bi-clock me-1"></i>
+                                            <?php endif; ?>
+                                            <?= htmlspecialchars($booking['PaymentStatus']) ?>
+                                        </span>
+                                    </span>
+                                </div>
+                                
+                                <?php if ($booking['PaymentMethod']): ?>
+                                    <div class="detail-row" style="margin-top: 8px;">
+                                        <span class="detail-label">
+                                            <i class="bi bi-credit-card me-1"></i>Method:
+                                        </span>
+                                        <span class="detail-value"><?= htmlspecialchars($booking['PaymentMethod']) ?></span>
+                                    </div>
+                                <?php endif; ?>
+                                
+                                <?php if ($booking['PaymentDate']): ?>
+                                    <div class="detail-row" style="margin-top: 8px;">
+                                        <span class="detail-label">
+                                            <i class="bi bi-calendar me-1"></i>Paid On:
+                                        </span>
+                                        <span class="detail-value"><?= date('F d, Y @ g:i A', strtotime($booking['PaymentDate'])) ?></span>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
                     </div>
 
                     <div class="action-buttons">
@@ -711,9 +752,25 @@ $stmt->close();
                                 <i class="bi bi-x-circle me-2"></i>Cancel Booking
                             </button>
                         <?php elseif ($booking['Status'] === 'Confirmed'): ?>
-                            <button class="btn btn-action btn-pay" onclick="showPaymentModal(<?= $booking['BookingID'] ?>, <?= $booking['TotalAmount'] ?>)">
+                            <?php if ($booking['PaymentStatus'] === 'Paid'): ?>
+                                <div class="alert alert-success mb-0" style="border-radius: 8px; padding: 12px 16px;">
+                                    <i class="bi bi-check-circle me-2"></i>
+                                    <strong>Payment Confirmed</strong>
+                                    <br><small>Your payment has been received. Thank you!</small>
+                                </div>
+                            <?php else: ?>
+                                <button class="btn btn-action btn-pay" 
+                                    data-booking-id="<?= $booking['BookingID'] ?>"
+                                    data-amount="<?= $booking['TotalAmount'] ?>"
+                                    data-quotation-id="<?= $booking['QuotationID'] ?>"
+                                    data-quotation-price="<?= $booking['QuotationPrice'] ?>"
+                                    data-special-request-price="<?= $booking['SpecialRequestPrice'] ?? 0 ?>"
+                                    data-special-request-items="<?= htmlspecialchars($booking['SpecialRequestItems'] ?? '[]') ?>"
+                                    data-quotation-details="<?= htmlspecialchars($booking['QuotationDetails'] ?? '') ?>"
+                                    onclick="showPaymentModalSafe(this)">
                                 <i class="bi bi-credit-card me-2"></i>Pay Now
                             </button>
+                            <?php endif; ?>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -743,10 +800,172 @@ $stmt->close();
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
-// Show payment modal
-function showPaymentModal(bookingId, amount) {
+
+// Show payment modal with quotation details
+function showPaymentModal(bookingId, amount, quotationId, quotationPrice, quotationDetails, specialRequestPrice, specialRequestItems) {
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('paymentModalWithQuotation');
+    
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.className = 'modal fade';
+        modal.id = 'paymentModalWithQuotation';
+        modal.innerHTML = `
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content" style="border-radius: 16px; border: none; box-shadow: 0 8px 32px rgba(0,0,0,0.12);">
+                    <div class="modal-header" style="background: linear-gradient(135deg, #000000, #212529); color: white; border-radius: 16px 16px 0 0; padding: 20px 24px; border: none;">
+                        <h5 class="modal-title" style="font-size: 1.1rem; font-weight: 600;"><i class="bi bi-receipt me-2"></i>Payment</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body" style="padding: 20px 24px;">
+                        <!-- Quotation Section -->
+                        <div id="quotationSection" class="mb-3" style="display: none;">
+                            <div class="alert alert-success" style="border-radius: 12px; border-left: 4px solid #28a745; padding: 16px; margin-bottom: 0;">
+                                <h6 class="mb-3" style="font-size: 0.95rem; font-weight: 600;">
+                                    <i class="bi bi-check-circle me-2"></i>Approved Quotation
+                                </h6>
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <strong style="font-size: 0.85rem;">Quotation ID:</strong> 
+                                        <span style="font-size: 0.85rem;">#<span id="modalQuotationId"></span></span>
+                                    </div>
+                                    <div class="col-6">
+                                        <strong style="font-size: 0.85rem;">Status:</strong> 
+                                        <span class="badge bg-success" style="font-size: 0.75rem;">Approved</span>
+                                    </div>
+                                    
+                                    <!-- Price Breakdown -->
+                                    <div class="col-12 mt-3 pt-2 border-top">
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <strong style="font-size: 0.85rem;">Base Price:</strong>
+                                            <span style="font-size: 0.85rem;">₱<span id="modalBasePriceValue">0.00</span></span>
+                                        </div>
+                                        
+                                        <!-- Special Request Items List -->
+                                        <div id="specialRequestItemsList"></div>
+                                        
+                                        <div class="d-flex justify-content-between" style="border-top: 1px solid rgba(0,0,0,0.1); padding-top: 8px;">
+                                            <strong style="font-size: 0.95rem;">Total Amount:</strong>
+                                            <span style="font-size: 1.2rem; color: #28a745; font-weight: 700;">₱<span id="modalQuotationPrice">0.00</span></span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-12 mt-2" id="quotationDetailsContainer">
+                                        <strong style="font-size: 0.85rem;">Details:</strong>
+                                        <p class="mb-0 mt-1" id="modalQuotationDetails" style="white-space: pre-wrap; font-size: 0.85rem; background: rgba(255,255,255,0.5); padding: 10px; border-radius: 8px;"></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Booking Info -->
+                        <div style="background: #e7f3ff; border-radius: 12px; padding: 14px 16px; margin-bottom: 20px; border-left: 4px solid #007dfe;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <span style="color: #0056b3; font-size: 0.9rem; font-weight: 600;">Booking #<span id="modalBookingId"></span></span>
+                                <span style="color: #0056b3; font-size: 1.2rem; font-weight: 700;">₱<span id="modalAmount"></span></span>
+                            </div>
+                        </div>
+                        
+                        <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-dark); margin-bottom: 12px;">
+                            <i class="bi bi-credit-card me-1"></i>Select Payment Method
+                        </div>
+
+                        <input type="hidden" id="paymentBookingId">
+                        <input type="hidden" id="paymentAmount">
+
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 10px;">
+                            <div class="payment-option-compact" id="cashOption">
+                                <i class="bi bi-cash-stack" style="font-size: 1.5rem; color: #28a745;"></i>
+                                <div style="flex: 1;">
+                                    <strong style="font-size: 0.95rem;">Cash</strong>
+                                    <p class="mb-0 text-muted" style="font-size: 0.75rem;">Pay on event day</p>
+                                </div>
+                                <i class="bi bi-chevron-right" style="color: #ccc; font-size: 0.9rem;"></i>
+                            </div>
+
+                            <div class="payment-option-compact" id="gcashOption">
+                                <i class="bi bi-phone-fill" style="font-size: 1.5rem; color: #007dfe;"></i>
+                                <div style="flex: 1;">
+                                    <strong style="font-size: 0.95rem;">GCash</strong>
+                                    <p class="mb-0 text-muted" style="font-size: 0.75rem;">Scan QR instantly</p>
+                                </div>
+                                <i class="bi bi-chevron-right" style="color: #ccc; font-size: 0.9rem;"></i>
+                            </div>
+                        </div>
+
+                        <div class="payment-option-compact" id="bankOption">
+                            <i class="bi bi-bank" style="font-size: 1.5rem; color: #6f42c1;"></i>
+                            <div style="flex: 1;">
+                                <strong style="font-size: 0.95rem;">Bank Transfer</strong>
+                                <p class="mb-0 text-muted" style="font-size: 0.75rem;">Online banking</p>
+                            </div>
+                            <i class="bi bi-chevron-right" style="color: #ccc; font-size: 0.9rem;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    
+    // Populate modal data
     document.getElementById('paymentBookingId').value = bookingId;
     document.getElementById('paymentAmount').value = amount;
+    document.getElementById('modalBookingId').textContent = bookingId;
+    document.getElementById('modalAmount').textContent = parseFloat(amount).toLocaleString('en-PH', {minimumFractionDigits: 2});
+    
+    // Show quotation section if available
+    const quotationSection = document.getElementById('quotationSection');
+    if (quotationId && quotationPrice) {
+        document.getElementById('modalQuotationId').textContent = quotationId;
+        document.getElementById('modalQuotationPrice').textContent = parseFloat(quotationPrice).toLocaleString('en-PH', {minimumFractionDigits: 2});
+        
+        // Display base price
+        const basePrice = parseFloat(quotationPrice) || 0;
+        const specialPrice = parseFloat(specialRequestPrice) || 0;
+        document.getElementById('modalBasePriceValue').textContent = basePrice.toLocaleString('en-PH', {minimumFractionDigits: 2});
+        
+        // Display special request items if they exist
+        const itemsList = document.getElementById('specialRequestItemsList');
+        itemsList.innerHTML = '';
+        
+        try {
+            const items = JSON.parse(specialRequestItems || '[]');
+            if (items.length > 0) {
+                items.forEach(item => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = 'd-flex justify-content-between mb-2';
+                    itemDiv.innerHTML = `
+                        <strong style="font-size: 0.85rem;">• ${item.name}:</strong>
+                        <span style="font-size: 0.85rem;">₱${parseFloat(item.price).toLocaleString('en-PH', {minimumFractionDigits: 2})}</span>
+                    `;
+                    itemsList.appendChild(itemDiv);
+                });
+                // Add separator
+                const separator = document.createElement('div');
+                separator.style.borderTop = '1px solid rgba(0,0,0,0.1)';
+                separator.style.marginTop = '8px';
+                separator.style.marginBottom = '8px';
+                itemsList.appendChild(separator);
+            }
+        } catch (e) {
+            console.error('Error parsing special request items:', e);
+        }
+        
+        // Always show quotation details container
+        const quotationDetailsContainer = document.getElementById('quotationDetailsContainer');
+        const quotationDetailsElement = document.getElementById('modalQuotationDetails');
+        
+        if (quotationDetails && quotationDetails.trim() !== '') {
+            quotationDetailsElement.textContent = quotationDetails;
+        } else {
+            quotationDetailsElement.textContent = 'No additional details provided.';
+        }
+        
+        quotationSection.style.display = 'block';
+    } else {
+        quotationSection.style.display = 'none';
+    }
     
     // Add click handlers to payment options
     document.getElementById('cashOption').onclick = function() {
@@ -761,8 +980,21 @@ function showPaymentModal(bookingId, amount) {
         selectPaymentMethodFromModal(bookingId, 'Bank Transfer', amount);
     };
     
-    const modal = new bootstrap.Modal(document.getElementById('paymentModal'));
-    modal.show();
+    const bootstrapModal = new bootstrap.Modal(modal);
+    bootstrapModal.show();
+}
+
+// Add this NEW function for safe modal opening
+function showPaymentModalSafe(button) {
+    const bookingId = button.dataset.bookingId;
+    const amount = button.dataset.amount;
+    const quotationId = button.dataset.quotationId || null;
+    const quotationPrice = button.dataset.quotationPrice || null;
+    const specialRequestPrice = button.dataset.specialRequestPrice || 0;
+    const specialRequestItems = button.dataset.specialRequestItems || '[]';
+    const quotationDetails = button.dataset.quotationDetails || null;
+    
+    showPaymentModal(bookingId, amount, quotationId, quotationPrice, quotationDetails, specialRequestPrice, specialRequestItems);
 }
 
 // Format card number with spaces
@@ -774,8 +1006,8 @@ function formatCardNumber(input) {
 
 // Handle payment selection from modal (closes modal first)
 function selectPaymentMethodFromModal(bookingId, method, amount) {
-    // Close the payment modal first
-    const paymentModal = document.querySelector('#paymentModal');
+    // Close the payment modal first - FIX THE ID HERE
+    const paymentModal = document.querySelector('#paymentModalWithQuotation');
     if (paymentModal) {
         const bootstrapModal = bootstrap.Modal.getInstance(paymentModal);
         if (bootstrapModal) {
@@ -863,19 +1095,23 @@ function closeCashModal() {
 
 // Submit Cash payment
 function submitCashPayment(bookingId, method) {
-    const formData = new FormData();
-    formData.append('update_payment_method', '1');
-    formData.append('booking_id', bookingId);
-    formData.append('payment_method', method);
+    const formData = {
+        booking_id: bookingId,
+        payment_method: method,
+        client_id: <?= getClientID() ?>
+    };
     
     const submitBtn = event.target;
     const originalText = submitBtn.innerHTML;
     submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Processing...';
     submitBtn.disabled = true;
     
-    fetch('my_bookings.php', {
+    fetch('/web/api/bookings/index.php?action=save_payment_method', {
         method: 'POST',
-        body: formData
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
     })
     .then(response => response.json())
     .then(data => {
@@ -966,27 +1202,31 @@ function closeGCashConfirmationModal() {
 
 // Submit GCash payment
 function submitGCashPayment(bookingId, method, amount) {
-    const formData = new FormData();
-    formData.append('update_payment_method', '1');
-    formData.append('booking_id', bookingId);
-    formData.append('payment_method', method);
+    const formData = {
+        booking_id: bookingId,
+        payment_method: method,
+        client_id: <?= getClientID() ?>
+    };
     
     const submitBtn = event.target;
     const originalText = submitBtn.innerHTML;
     submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Processing...';
     submitBtn.disabled = true;
     
-    fetch('my_bookings.php', {
+    fetch('/web/api/bookings/index.php?action=save_payment_method', {
         method: 'POST',
-        body: formData
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
     })
     .then(response => response.json())
     .then(data => {
         closeGCashConfirmationModal();
         
         if (data.success) {
-            // Remove the immediate modal show, let the page reload handle it
-            location.reload(); // This will trigger the session-based auto-show
+            // Show GCash QR modal directly without page reload
+            showGCashModal(amount, bookingId);
         } else {
             alert(data.message || 'Failed to update payment method');
             submitBtn.innerHTML = originalText;
@@ -1094,21 +1334,23 @@ function submitBankTransfer(bookingId, method) {
         return;
     }
     
-    const formData = new FormData();
-    formData.append('update_payment_method', '1');
-    formData.append('booking_id', bookingId);
-    formData.append('payment_method', method);
-    formData.append('card_number', cardNumber);
-    formData.append('cardholder_name', cardholderName);
+    const formData = {
+        booking_id: bookingId,
+        payment_method: method,
+        client_id: <?= getClientID() ?>
+    };
     
     const submitBtn = event.target;
     const originalText = submitBtn.innerHTML;
     submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Processing...';
     submitBtn.disabled = true;
     
-    fetch('my_bookings.php', {
+    fetch('/web/api/bookings/index.php?action=save_payment_method', {
         method: 'POST',
-        body: formData
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
     })
     .then(response => response.json())
     .then(data => {
@@ -1171,6 +1413,53 @@ function closeGCashModal() {
     }
 }
 
+// Complete GCash payment with reference number
+function completeGCashPayment() {
+    const refNumber = document.getElementById('gcashRefNumber').value.trim();
+    const bookingIdSpan = document.getElementById('gcashBookingId');
+    const bookingId = bookingIdSpan ? bookingIdSpan.textContent : '';
+    
+    if (!refNumber) {
+        alert('Please enter your GCash reference number to proceed.');
+        return;
+    }
+    
+    const formData = {
+        booking_id: bookingId,
+        gcash_reference: refNumber
+    };
+    
+    const btn = event.target;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Saving...';
+    btn.disabled = true;
+    
+    fetch('/web/api/bookings/index.php?action=save_gcash_reference', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✓ GCash payment recorded!\n\nYour reference number has been saved. We will verify your payment shortly.');
+            closeGCashModal();
+        } else {
+            alert(data.message || 'Failed to save reference number');
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred. Please try again.');
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    });
+}
+
 // Close GCash modal when clicking outside
 window.onclick = function(event) {
     const modal = document.getElementById('gcashModal');
@@ -1203,46 +1492,6 @@ function cancelBooking(bookingId) {
 }
 </script>
 
-    <!-- Payment Modal -->
-    <div class="modal fade" id="paymentModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content" style="border-radius: 20px;">
-                <div class="modal-header" style="background: var(--primary-dark); color: white; border-radius: 20px 20px 0 0;">
-                    <h5 class="modal-title"><i class="bi bi-credit-card me-2"></i>Select Payment Method</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-4">
-                    <input type="hidden" id="paymentBookingId">
-                    <input type="hidden" id="paymentAmount">
-                    
-                    <div class="payment-option-modal mb-3" id="cashOption">
-                        <i class="bi bi-cash-stack me-3" style="font-size: 2rem;"></i>
-                        <div>
-                            <strong>Cash</strong>
-                            <p class="mb-0 text-muted">Pay with cash on the event day</p>
-                        </div>
-                    </div>
-
-                    <div class="payment-option-modal mb-3" id="gcashOption">
-                        <i class="bi bi-phone me-3" style="font-size: 2rem;"></i>
-                        <div>
-                            <strong>GCash</strong>
-                            <p class="mb-0 text-muted">Scan QR code to pay instantly</p>
-                        </div>
-                    </div>
-
-                    <div class="payment-option-modal" id="bankOption">
-                        <i class="bi bi-bank me-3" style="font-size: 2rem;"></i>
-                        <div>
-                            <strong>Bank Transfer</strong>
-                            <p class="mb-0 text-muted">Transfer via online banking</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <style>
     .payment-option-modal {
         border: 2px solid var(--border-gray);
@@ -1263,6 +1512,30 @@ function cancelBooking(bookingId) {
     .payment-option-modal i {
         color: var(--primary-dark);
     }
+
+    .payment-option-compact {
+    border: 1.5px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: white;
+}
+
+    .payment-option-compact:hover {
+        border-color: var(--primary-dark);
+        background: #f8f9fa;
+        transform: translateY(-2px);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .payment-option-compact:active {
+        transform: translateY(0px);
+    }
+
     </style>
 
     <!-- GCash QR Code Modal -->
@@ -1291,12 +1564,23 @@ function cancelBooking(bookingId) {
                 </p>
             </div>
             
+            <div style="margin: 15px 0;">
+                <label style="display: block; margin-bottom: 8px; color: var(--text-dark); font-weight: 600; font-size: 0.95rem;">
+                    <i class="bi bi-key me-1"></i>GCash Reference Number <span style="color: red;">*</span>
+                </label>
+                <input type="text" id="gcashRefNumber" placeholder="Enter your GCash reference number" 
+                       style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem;" maxlength="20">
+                <small style="color: #666; display: block; margin-top: 5px;">
+                    <i class="bi bi-info-circle me-1"></i>You can find this in your GCash app after payment
+                </small>
+            </div>
+            
             <p style="color: var(--medium-gray); font-size: 0.85rem; margin-bottom: 15px;">
                 <i class="bi bi-shield-check me-1"></i>
                 Keep your reference number for verification.
             </p>
             
-            <button onclick="closeGCashModal()" type="button" style="background: var(--primary-dark); color: white; border: none; padding: 10px 25px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.95rem;">
+            <button onclick="completeGCashPayment()" type="button" style="background: var(--primary-dark); color: white; border: none; padding: 10px 25px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.95rem; width: 100%;">
                 <i class="bi bi-check-circle me-2"></i>I've Completed Payment
             </button>
         </div>
