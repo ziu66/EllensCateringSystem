@@ -73,11 +73,17 @@ INSERT INTO `admin` (`AdminID`, `Name`, `Email`, `Password`, `user_role`) VALUES
 --
 
 CREATE TABLE `agreement` (
-  `AgreementID` int(11) NOT NULL,
+  `AgreementID` int(11) NOT NULL AUTO_INCREMENT,
   `BookingID` int(11) DEFAULT NULL,
   `AdminID` int(11) DEFAULT NULL,
-  `ContractFile` varchar(255) DEFAULT NULL,
-  `SignedDate` date DEFAULT NULL
+  `ClientID` int(11) DEFAULT NULL,
+  `ContractFile` longtext DEFAULT NULL,
+  `CustomerSignature` longtext DEFAULT NULL,
+  `SignedDate` date DEFAULT NULL,
+  `Status` enum('unsigned','signed') DEFAULT 'unsigned',
+  `CreatedAt` timestamp NOT NULL DEFAULT current_timestamp(),
+  `UpdatedAt` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`AgreementID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------

@@ -442,6 +442,12 @@ $cartCount = isset($_SESSION['food_cart']) ? count($_SESSION['food_cart']) : 0;
                             <li><a class="dropdown-item text-danger" href="logout.php"><i class="bi bi-box-arrow-right me-2"></i> Logout</a></li>
                         </ul>
                     </li>
+                    <li class="nav-item ms-3">
+                        <a href="#" class="nav-link position-relative">
+                            <i class="bi bi-bell-fill"></i>
+                            <span class="badge bg-danger rounded-pill" style="position: absolute; top: -5px; right: 5px; font-size: 0.65rem; padding: 2px 5px;">3</span>
+                        </a>
+                    </li>
                 <?php else: ?>
                     <li class="nav-item"><a href="login_dashboard.php" class="nav-link">Login</a></li>
                 <?php endif; ?>
@@ -592,6 +598,31 @@ $cartCount = isset($_SESSION['food_cart']) ? count($_SESSION['food_cart']) : 0;
     <?php if ($isLoggedIn): ?>
         document.addEventListener('DOMContentLoaded', updateCartCount);
     <?php endif; ?>
+</script>
+
+<script>
+    // Navbar scroll effect
+    window.addEventListener("scroll", function() {
+        const navbar = document.querySelector(".navbar");
+        navbar.classList.toggle("scrolled", window.scrollY > 50);
+    });
+
+    // Dropdown hover effect for desktop
+    document.querySelectorAll('.nav-item.dropdown').forEach(dropdown => {
+        dropdown.addEventListener('mouseenter', () => {
+            if (window.innerWidth >= 992) {
+                dropdown.classList.add('show');
+                dropdown.querySelector('.dropdown-menu').classList.add('show');
+            }
+        });
+
+        dropdown.addEventListener('mouseleave', () => {
+            if (window.innerWidth >= 992) {
+                dropdown.classList.remove('show');
+                dropdown.querySelector('.dropdown-menu').classList.remove('show');
+            }
+        });
+    });
 </script>
 
 </body>

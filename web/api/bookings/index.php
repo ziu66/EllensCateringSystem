@@ -127,6 +127,36 @@ function handleConfirmPayment($conn) {
             $stmt = $conn->prepare($updateQuery);
             $stmt->execute([':bookingID' => $bookingID]);
             
+            // Get booking details for agreement creation
+            $bookingDetailQuery = "SELECT BookingID, ClientID FROM booking WHERE BookingID = :bookingID LIMIT 1";
+            $stmtBooking = $conn->prepare($bookingDetailQuery);
+            $stmtBooking->execute([':bookingID' => $bookingID]);
+            $bookingDetail = $stmtBooking->fetch();
+            
+            if (!$bookingDetail) {
+                throw new Exception('Could not retrieve booking details');
+            }
+            
+            // Create agreement record if it doesn't exist
+            $checkAgreementQuery = "SELECT AgreementID FROM agreement WHERE BookingID = :bookingID LIMIT 1";
+            $stmtCheckAgreement = $conn->prepare($checkAgreementQuery);
+            $stmtCheckAgreement->execute([':bookingID' => $bookingID]);
+            
+            if ($stmtCheckAgreement->rowCount() === 0) {
+                // Agreement doesn't exist, create it
+                // DON'T try to generate PDF here - do it on-the-fly when needed
+                $createAgreementQuery = "INSERT INTO agreement 
+                                        (BookingID, ClientID, Status, CreatedAt, UpdatedAt) 
+                                        VALUES 
+                                        (:bookingID, :clientID, 'unsigned', NOW(), NOW())";
+                
+                $stmtCreateAgreement = $conn->prepare($createAgreementQuery);
+                $stmtCreateAgreement->execute([
+                    ':bookingID' => $bookingDetail['BookingID'],
+                    ':clientID' => $bookingDetail['ClientID']
+                ]);
+            }
+            
             $conn->commit();
             
             // Log activity
@@ -139,17 +169,19 @@ function handleConfirmPayment($conn) {
                 'payment_date' => date('Y-m-d H:i:s')
             ], 200);
             
-        } catch (PDOException $e) {
-            $conn->rollBack();
+        } catch (Exception $e) {
+            if ($conn->inTransaction()) {
+                $conn->rollBack();
+            }
             throw $e;
         }
         
-    } catch (PDOException $e) {
-        if ($conn->inTransaction()) {
+    } catch (Exception $e) {
+        if ($conn && $conn->inTransaction()) {
             $conn->rollBack();
         }
         error_log("Confirm Payment Error: " . $e->getMessage());
-        sendResponse(false, 'Error confirming payment', null, 500);
+        sendResponse(false, 'Error confirming payment: ' . $e->getMessage(), null, 500);
     }
 }
 

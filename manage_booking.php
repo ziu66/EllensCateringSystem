@@ -8,6 +8,7 @@
     $isLoggedIn = isLoggedIn();
     $clientName = $isLoggedIn ? getUserName() : '';
     $client_id = $isLoggedIn ? getClientID() : null;
+    $cartCount = isset($_SESSION['food_cart']) ? count($_SESSION['food_cart']) : 0;
 
     $conn = getDB();
     $client_id = getClientID();
@@ -198,7 +199,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_booking'])) {
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
                 background: linear-gradient(135deg, var(--light-gray) 0%, #ffffff 100%);
                 min-height: 100vh;
-                padding: 50px 0;
+                padding-top: 200px;
+                padding-bottom: 50px;
             }
 
             .booking-container {
@@ -611,10 +613,186 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_booking'])) {
             padding: 30px 20px;
         }
     }
+
+    /* Navbar */
+    .navbar {
+        background: rgba(255, 255, 255, 0.98) !important;
+        box-shadow: 0 3px 15px rgba(0, 0, 0, 0.1);
+        position: fixed;
+        width: 100%;
+        z-index: 1000;
+        top: 0;
+        padding: 1.2rem 0;
+    }
+
+    .navbar-brand {
+        position: relative;
+        display: flex;
+        align-items: center;
+        height: 80px;
+        overflow: visible;
+        margin-left: -50px;
+    }
+
+    .navbar-brand img {
+        position: absolute;
+        height: 150px;
+        width: 150px;
+        border-radius: 50%;
+        background: white;
+        border: 3px solid var(--primary-dark);
+        padding: 10px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        top: -10px;
+        left: 0;
+        object-fit: contain;
+        z-index: 2;
+    }
+
+    .nav-link {
+        color: var(--primary-dark) !important;
+        font-weight: 500;
+        margin: 0 14px;
+        transition: color 0.3s ease;
+        font-size: 1.05rem;
+        position: relative;
+    }
+
+    .nav-link:not(.dropdown-toggle)::after {
+        content: "";
+        position: absolute;
+        bottom: -6px;
+        left: 0;
+        width: 0;
+        height: 2px;
+        background-color: var(--primary-dark);
+        transition: width 0.3s ease;
+    }
+
+    .nav-link:not(.dropdown-toggle):hover::after {
+        width: 100%;
+    }
+
+    .nav-link.dropdown-toggle::before {
+        content: "";
+        position: absolute;
+        bottom: -6px;
+        left: 0;
+        width: 0;
+        height: 2px;
+        background-color: var(--primary-dark);
+        transition: width 0.3s ease;
+    }
+
+    .nav-link.dropdown-toggle:hover::before {
+        width: 100%;
+    }
+
+    .dropdown-menu {
+        background-color: #ffffff;
+        border: 1px solid var(--border-gray);
+        border-radius: 8px;
+        padding: 10px 0;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        margin-top: 10px;
+    }
+
+    .dropdown-item {
+        color: var(--text-dark);
+        padding: 10px 20px;
+        font-weight: 500;
+        transition: all 0.2s;
+    }
+
+    .dropdown-item:hover {
+        background-color: var(--primary-dark);
+        color: #fff;
+        padding-left: 25px;
+    }
+
+    .nav-link .badge {
+        position: absolute;
+        top: -5px;
+        right: -10px;
+        font-size: 0.7rem;
+        padding: 3px 6px;
+        animation: pulse 1s ease-in-out;
+    }
+
+    @keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+    }
         </style>
     </head>
 
     <body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg">
+    <div class="container">
+        <a class="navbar-brand" href="index.php">
+            <img src="ellenLogo_removebg-preview.png" alt="Ellen's Catering Logo">
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="nav">
+            <ul class="navbar-nav mx-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a href="index.php" class="nav-link">Home</a>
+                </li>
+
+                <li class="nav-item">
+                    <a href="services.php" class="nav-link">Catering Services</a>
+                </li>
+
+                <li class="nav-item">
+                    <a href="food_menu.php" class="nav-link">Food Menu</a>
+                </li>
+
+                <li class="nav-item"><a href="manage_booking.php" class="nav-link active">Book Now</a></li>
+                <li class="nav-item"><a href="contact.php" class="nav-link">Contact</a></li>
+
+                <li class="nav-item">
+    <a href="view_cart.php" class="nav-link position-relative">
+        <i class="bi bi-cart3"></i> Cart
+        <span class="badge bg-danger rounded-pill ms-1" id="cart-badge" 
+              <?= ($cartCount == 0) ? 'style="display: none;"' : '' ?>>
+            <?= $cartCount ?>
+        </span>
+    </a>
+</li>
+            </ul>
+
+            <ul class="navbar-nav mb-2 mb-lg-0">
+                <?php if ($isLoggedIn): ?>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="profileDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle me-1"></i> <?= htmlspecialchars($clientName) ?>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="profile_management.php"><i class="bi bi-speedometer2 me-2"></i> My Profile</a></li>
+                            <li><a class="dropdown-item" href="view_cart.php"><i class="bi bi-cart3 me-2"></i> My Cart</a></li>
+                            <li><a class="dropdown-item" href="my_bookings.php"><i class="bi bi-calendar-check me-2"></i> My Bookings</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-danger" href="logout.php"><i class="bi bi-box-arrow-right me-2"></i> Logout</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item ms-3">
+                        <a href="#" class="nav-link position-relative">
+                            <i class="bi bi-bell-fill"></i>
+                            <span class="badge bg-danger rounded-pill" style="position: absolute; top: -5px; right: -10px; font-size: 0.65rem; padding: 2px 5px;">3</span>
+                        </a>
+                    </li>
+                <?php else: ?>
+                    <li class="nav-item"><a href="login_dashboard.php" class="nav-link">Login</a></li>
+                <?php endif; ?>
+            </ul>
+        </div>
+    </div>
+</nav>
+
         <div class="booking-container">
             <div class="page-header">
                 <h1><i class="bi bi-calendar-check me-3"></i>Book Your Event</h1>
@@ -1109,5 +1287,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_booking'])) {
     <?php endif; ?>
         
         </script>
+
+    <script>
+        // Dropdown hover effect for desktop
+        document.querySelectorAll('.nav-item.dropdown').forEach(dropdown => {
+            dropdown.addEventListener('mouseenter', () => {
+                if (window.innerWidth >= 992) {
+                    dropdown.classList.add('show');
+                    dropdown.querySelector('.dropdown-menu').classList.add('show');
+                }
+            });
+
+            dropdown.addEventListener('mouseleave', () => {
+                if (window.innerWidth >= 992) {
+                    dropdown.classList.remove('show');
+                    dropdown.querySelector('.dropdown-menu').classList.remove('show');
+                }
+            });
+        });
+    </script>
     </body>
     </html>

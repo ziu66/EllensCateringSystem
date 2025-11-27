@@ -1506,7 +1506,7 @@ function displayBookings(bookings) {
     const tbody = document.getElementById('bookingsTable');
     
     if (!bookings || bookings.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">No bookings found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">No bookings found</td></tr>';
         return;
     }
 
@@ -1531,6 +1531,7 @@ function displayBookings(bookings) {
             <td>
                 <button class="btn btn-sm btn-outline-dark" onclick="viewBookingDetails(${booking.BookingID})" title="View Details"><i class="bi bi-eye"></i></button>
                 <button class="btn btn-sm btn-outline-dark" onclick="editBookingDetails(${booking.BookingID})" title="Edit Booking"><i class="bi bi-pencil"></i></button>
+                ${booking.PaymentStatus === 'Paid' ? `<button class="btn btn-sm btn-outline-info" onclick="viewAgreement(${booking.BookingID})" title="View Agreement"><i class="bi bi-file-earmark-pdf"></i></button>` : ''}
             </td>
         </tr>
         `;
@@ -2279,7 +2280,7 @@ async function confirmPayment(bookingId) {
     if (!confirm('Confirm this payment?\n\nThis will mark the payment as completed.')) return;
     
     try {
-        const response = await fetch('./web/api/bookings/index.php?action=confirm_payment', {
+        const response = await fetch(API_BASE + 'bookings/index.php?action=confirm_payment', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -4130,6 +4131,169 @@ function showToast(type, message) {
 
 function getAuthToken() {
     return sessionStorage.getItem('auth_token') || localStorage.getItem('auth_token') || '';
+}
+
+// ===== AGREEMENT MANAGEMENT =====
+function viewAgreement(bookingID) {
+    // Create modal if doesn't exist
+    let modal = document.getElementById('adminAgreementModal');
+    if (!modal) {
+        createAdminAgreementModal();
+        modal = document.getElementById('adminAgreementModal');
+    }
+
+    // Load agreement data
+    fetch(`../api/agreements/index.php?action=admin_get_agreement&booking_id=${bookingID}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.agreement) {
+                const agreement = data.agreement;
+                
+                // Display agreement preview
+                if (agreement.ContractFile) {
+                    try {
+                        const html = atob(agreement.ContractFile);
+                        document.getElementById('adminAgreementPreview').innerHTML = html;
+                    } catch (e) {
+                        document.getElementById('adminAgreementPreview').innerHTML = '<p class="text-danger">Error loading agreement preview</p>';
+                    }
+                }
+
+                // Show signature if signed
+                if (agreement.Status === 'signed' && agreement.CustomerSignature) {
+                    document.getElementById('adminSignatureSection').innerHTML = `
+                        <div style="margin-top: 20px; border-top: 2px solid #ddd; padding-top: 20px;">
+                            <h6 style="font-weight: 600; margin-bottom: 15px;">
+                                <i class="bi bi-check-circle me-2"></i>Customer Signature
+                            </h6>
+                            <p style="color: #666; font-size: 0.85rem; margin-bottom: 10px;">
+                                <strong>Signed on:</strong> ${new Date(agreement.SignedDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                            </p>
+                            <div style="border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #f9f9f9; text-align: center;">
+                                <img src="${agreement.CustomerSignature}" alt="Customer Signature" style="max-width: 300px; max-height: 100px; object-fit: contain;">
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('adminSignatureSection').innerHTML = `
+                        <div class="alert alert-warning" style="margin-top: 20px;">
+                            <i class="bi bi-clock me-2"></i>
+                            <strong>Not Yet Signed</strong>
+                            <br>
+                            <small>Awaiting customer signature...</small>
+                        </div>
+                    `;
+                }
+
+                // Update button visibility
+                if (agreement.Status === 'signed') {
+                    document.getElementById('printAgreementBtn').style.display = 'block';
+                    document.getElementById('downloadAgreementBtn').style.display = 'block';
+                } else {
+                    document.getElementById('printAgreementBtn').style.display = 'none';
+                    document.getElementById('downloadAgreementBtn').style.display = 'none';
+                }
+
+                // Store booking ID for print/download
+                document.getElementById('adminAgreementModal').dataset.bookingId = bookingID;
+
+            } else {
+                document.getElementById('adminAgreementPreview').innerHTML = '<p class="text-warning">Agreement not found or not yet created.</p>';
+                document.getElementById('adminSignatureSection').innerHTML = '';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading agreement:', error);
+            document.getElementById('adminAgreementPreview').innerHTML = '<p class="text-danger">Error loading agreement</p>';
+        });
+
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+}
+
+function createAdminAgreementModal() {
+    const modalHTML = `
+    <div class="modal fade" id="adminAgreementModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content" style="border-radius: 16px; border: none;">
+                <div class="modal-header" style="background: linear-gradient(135deg, #000000, #212529); color: white; border-radius: 16px 16px 0 0; padding: 20px 24px; border: none;">
+                    <h5 class="modal-title">
+                        <i class="bi bi-file-earmark-pdf me-2"></i>Agreement Details
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                    <div id="adminAgreementPreview" style="background: white; padding: 20px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 20px; font-size: 0.9rem; line-height: 1.6;"></div>
+                    <div id="adminSignatureSection"></div>
+                </div>
+                <div class="modal-footer" style="border-top: 1px solid #ddd; padding: 20px 24px;">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x me-1"></i>Close
+                    </button>
+                    <button type="button" id="printAgreementBtn" class="btn btn-info" onclick="printAgreement()" style="display: none;">
+                        <i class="bi bi-printer me-1"></i>Print
+                    </button>
+                    <button type="button" id="downloadAgreementBtn" class="btn btn-primary" onclick="downloadAgreementPDF()" style="display: none;">
+                        <i class="bi bi-download me-1"></i>Download PDF
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
+
+function printAgreement() {
+    const content = document.getElementById('adminAgreementPreview').innerHTML;
+    const printWindow = window.open('', '', 'width=900,height=1200');
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Catering Agreement</title>
+            <style>
+                body { font-family: Arial, sans-serif; padding: 20px; }
+                @media print { body { margin: 0; padding: 10px; } }
+            </style>
+        </head>
+        <body>
+            ${content}
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
+    setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+    }, 250);
+}
+
+function downloadAgreementPDF() {
+    const bookingID = document.getElementById('adminAgreementModal').dataset.bookingId;
+    const agreementID = bookingID; // Using booking ID as reference
+    
+    fetch(`../api/agreements/index.php?action=download_pdf&agreement_id=${agreementID}&client_id=0`)
+        .then(response => {
+            if (response.ok) {
+                return response.blob();
+            }
+            throw new Error('Download failed');
+        })
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `Agreement_Booking_${bookingID}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            window.URL.revokeObjectURL(url);
+            link.remove();
+        })
+        .catch(error => {
+            console.error('Error downloading PDF:', error);
+            alert('Error downloading PDF');
+        });
 }
 
 // Initialize on page load

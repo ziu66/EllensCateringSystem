@@ -6,6 +6,9 @@ startSecureSession();
 requireLogin();
 
 $clientID = getClientID(); 
+$isLoggedIn = isLoggedIn();
+$clientName = $isLoggedIn ? getUserName() : null;
+$cartCount = isset($_SESSION['food_cart']) ? count($_SESSION['food_cart']) : 0;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_payment_method'])) {
     header('Content-Type: application/json');
@@ -114,7 +117,7 @@ $bookingsQuery = "
     LEFT JOIN quotation q ON b.BookingID = q.BookingID
     WHERE b.ClientID = ?
     GROUP BY b.BookingID
-    ORDER BY b.DateBooked DESC
+    ORDER BY b.EventDate DESC, b.DateBooked DESC
 ";
 $stmt = $conn->prepare($bookingsQuery);
 $stmt->bind_param("i", $client_id);
@@ -147,7 +150,8 @@ $stmt->close();
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             background: linear-gradient(135deg, var(--light-gray) 0%, #ffffff 100%);
             min-height: 100vh;
-            padding: 50px 0;
+            padding-top: 200px;
+            padding-bottom: 50px;
         }
 
         .container {
@@ -584,13 +588,188 @@ $stmt->close();
     }
 }
 
+        /* Navbar */
+        .navbar {
+            background: rgba(255, 255, 255, 0.98) !important;
+            box-shadow: 0 3px 15px rgba(0, 0, 0, 0.1);
+            position: fixed;
+            width: 100%;
+            z-index: 1000;
+            top: 0;
+            padding: 1.2rem 0;
+        }
+
+        .navbar-brand {
+            position: relative;
+            display: flex;
+            align-items: center;
+            height: 80px;
+            overflow: visible;
+            margin-left: -50px;
+        }
+
+        .navbar-brand img {
+            position: absolute;
+            height: 150px;
+            width: 150px;
+            border-radius: 50%;
+            background: white;
+            border: 3px solid var(--primary-dark);
+            padding: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            top: -10px;
+            left: -60px;
+            object-fit: contain;
+            z-index: 2;
+        }
+
+        .nav-link {
+            color: var(--primary-dark) !important;
+            font-weight: 500;
+            margin: 0 14px;
+            transition: color 0.3s ease;
+            font-size: 1.05rem;
+            position: relative;
+        }
+
+        .nav-link:not(.dropdown-toggle)::after {
+            content: "";
+            position: absolute;
+            bottom: -6px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background-color: var(--primary-dark);
+            transition: width 0.3s ease;
+        }
+
+        .nav-link:not(.dropdown-toggle):hover::after {
+            width: 100%;
+        }
+
+        .nav-link.dropdown-toggle::before {
+            content: "";
+            position: absolute;
+            bottom: -6px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background-color: var(--primary-dark);
+            transition: width 0.3s ease;
+        }
+
+        .nav-link.dropdown-toggle:hover::before {
+            width: 100%;
+        }
+
+        .dropdown-menu {
+            background-color: #ffffff;
+            border: 1px solid var(--border-gray);
+            border-radius: 8px;
+            padding: 10px 0;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            margin-top: 10px;
+        }
+
+        .dropdown-item {
+            color: var(--text-dark);
+            padding: 10px 20px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .dropdown-item:hover {
+            background-color: var(--primary-dark);
+            color: #fff;
+            padding-left: 25px;
+        }
+
+        .nav-link .badge {
+            position: absolute;
+            top: -5px;
+            right: -10px;
+            font-size: 0.7rem;
+            padding: 3px 6px;
+            animation: pulse 1s ease-in-out;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
     </style>
 </head>
 
 <body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg">
+    <div class="container">
+        <a class="navbar-brand" href="index.php">
+            <img src="ellenLogo_removebg-preview.png" alt="Ellen's Catering Logo">
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="nav">
+            <ul class="navbar-nav mx-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a href="index.php" class="nav-link">Home</a>
+                </li>
+
+                <li class="nav-item">
+                    <a href="services.php" class="nav-link">Catering Services</a>
+                </li>
+
+                <li class="nav-item">
+                    <a href="food_menu.php" class="nav-link">Food Menu</a>
+                </li>
+
+                <li class="nav-item"><a href="manage_booking.php" class="nav-link">Book Now</a></li>
+                <li class="nav-item"><a href="contact.php" class="nav-link">Contact</a></li>
+
+                <li class="nav-item">
+    <a href="view_cart.php" class="nav-link position-relative">
+        <i class="bi bi-cart3"></i> Cart
+        <span class="badge bg-danger rounded-pill ms-1" id="cart-badge" 
+              <?= ($cartCount == 0) ? 'style="display: none;"' : '' ?>>
+            <?= $cartCount ?>
+        </span>
+    </a>
+</li>
+            </ul>
+
+            <ul class="navbar-nav mb-2 mb-lg-0">
+                <?php if ($isLoggedIn): ?>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="profileDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle me-1"></i> <?= htmlspecialchars($clientName) ?>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="profile_management.php"><i class="bi bi-speedometer2 me-2"></i> My Profile</a></li>
+                            <li><a class="dropdown-item" href="view_cart.php"><i class="bi bi-cart3 me-2"></i> My Cart</a></li>
+                            <li><a class="dropdown-item" href="my_bookings.php"><i class="bi bi-calendar-check me-2"></i> My Bookings</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-danger" href="logout.php"><i class="bi bi-box-arrow-right me-2"></i> Logout</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item ms-3">
+                        <a href="#" class="nav-link position-relative">
+                            <i class="bi bi-bell-fill"></i>
+                            <span class="badge bg-danger rounded-pill" style="position: absolute; top: -5px; right: -10px; font-size: 0.65rem; padding: 2px 5px;">3</span>
+                        </a>
+                    </li>
+                <?php else: ?>
+                    <li class="nav-item"><a href="login_dashboard.php" class="nav-link">Login</a></li>
+                <?php endif; ?>
+            </ul>
+        </div>
+    </div>
+</nav>
     <div class="container">
         <div class="page-header">
-            <h1><i class="bi bi-calendar-check me-3"></i>My Bookings</h1>
+            <h1><i class="bi bi-briefcase me-3"></i>My Bookings</h1>
             <p>View and manage your catering reservations</p>
         </div>
 
@@ -777,10 +956,17 @@ $stmt->close();
                             </button>
                         <?php elseif ($booking['Status'] === 'Confirmed'): ?>
                             <?php if ($booking['PaymentStatus'] === 'Paid'): ?>
-                                <div class="alert alert-success mb-0" style="border-radius: 8px; padding: 12px 16px;">
-                                    <i class="bi bi-check-circle me-2"></i>
-                                    <strong>Payment Confirmed</strong>
-                                    <br><small>Your payment has been received. Thank you!</small>
+                                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                    <div style="flex: 1; min-width: 200px;">
+                                        <div class="alert alert-success mb-0" style="border-radius: 8px; padding: 12px 16px;">
+                                            <i class="bi bi-check-circle me-2"></i>
+                                            <strong>Payment Confirmed</strong>
+                                            <br><small>Your payment has been received. Thank you!</small>
+                                        </div>
+                                    </div>
+                                    <button class="btn btn-action btn-primary" style="flex: 0 0 auto; padding: 12px 20px;" onclick="openAgreementModal(<?= $booking['BookingID'] ?>, <?= $clientID ?>, '<?= htmlspecialchars($booking['EventDate']) ?>')">
+                                        <i class="bi bi-file-earmark-pdf me-2"></i>Sign Agreement
+                                    </button>
                                 </div>
                             <?php else: ?>
                                 <button class="btn btn-action btn-pay" 
@@ -1785,5 +1971,284 @@ function cancelBooking(bookingId) {
         </div>
     </div>
 
+    <script>
+        // Dropdown hover effect for desktop
+        document.querySelectorAll('.nav-item.dropdown').forEach(dropdown => {
+            dropdown.addEventListener('mouseenter', () => {
+                if (window.innerWidth >= 992) {
+                    dropdown.classList.add('show');
+                    dropdown.querySelector('.dropdown-menu').classList.add('show');
+                }
+            });
+
+            dropdown.addEventListener('mouseleave', () => {
+                if (window.innerWidth >= 992) {
+                    dropdown.classList.remove('show');
+                    dropdown.querySelector('.dropdown-menu').classList.remove('show');
+                }
+            });
+        });
+
+        // Agreement Modal Functions
+        let signatureCanvas = null;
+        let signatureContext = null;
+        let isDrawing = false;
+        let currentBookingID = null;
+        let currentClientID = null;
+
+        function openAgreementModal(bookingID, clientID, eventDate) {
+            currentBookingID = bookingID;
+            currentClientID = clientID;
+
+            // Check if already signed
+            checkAgreementStatus(bookingID, clientID);
+
+            // Create or show modal
+            let modal = document.getElementById('agreementModal');
+            if (!modal) {
+                createAgreementModal();
+                modal = document.getElementById('agreementModal');
+            }
+
+            // Initialize signature canvas
+            setTimeout(() => {
+                initSignatureCanvas();
+                loadAgreementPreview(bookingID, clientID);
+            }, 100);
+
+            const bsModal = new bootstrap.Modal(modal);
+            bsModal.show();
+        }
+
+        function createAgreementModal() {
+            const modalHTML = `
+            <div class="modal fade" id="agreementModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-centered">
+                    <div class="modal-content" style="border-radius: 16px; border: none;">
+                        <div class="modal-header" style="background: linear-gradient(135deg, #000000, #212529); color: white; border-radius: 16px 16px 0 0; padding: 20px 24px; border: none;">
+                            <h5 class="modal-title">
+                                <i class="bi bi-file-earmark-pdf me-2"></i>Catering Agreement
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                            <div id="agreementPreview" style="background: white; padding: 20px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 20px; font-size: 0.9rem; line-height: 1.6;"></div>
+
+                            <div id="signatureSection" style="margin-top: 30px;">
+                                <h6 style="font-weight: 600; margin-bottom: 15px;">
+                                    <i class="bi bi-pen me-2"></i>Your Signature
+                                </h6>
+                                <p style="color: #666; font-size: 0.85rem; margin-bottom: 10px;">
+                                    Please sign below to confirm your agreement with the terms and conditions.
+                                </p>
+                                <div style="border: 2px dashed #ddd; border-radius: 8px; padding: 10px; background: #fafafa;">
+                                    <canvas id="signatureCanvas" width="400" height="150" style="border: 1px solid #ddd; border-radius: 6px; cursor: crosshair; display: block; background: white; width: 100%; height: 150px;"></canvas>
+                                </div>
+                                <div style="margin-top: 10px; display: flex; gap: 10px;">
+                                    <button type="button" class="btn btn-outline-secondary" onclick="clearSignature()" style="flex: 1;">
+                                        <i class="bi bi-arrow-counterclockwise me-1"></i>Clear
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="undoSignature()" style="flex: 1;">
+                                        <i class="bi bi-arrow-left me-1"></i>Undo
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer" style="border-top: 1px solid #ddd; padding: 20px 24px;">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                <i class="bi bi-x me-1"></i>Cancel
+                            </button>
+                            <button type="button" class="btn btn-primary" onclick="submitSignature()" style="background: var(--primary-dark); border: none;">
+                                <i class="bi bi-check-circle me-1"></i>Sign & Submit
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            `;
+
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+        }
+
+        function initSignatureCanvas() {
+            signatureCanvas = document.getElementById('signatureCanvas');
+            if (!signatureCanvas) return;
+
+            signatureContext = signatureCanvas.getContext('2d');
+            
+            // Set canvas resolution properly with device pixel ratio
+            const dpr = window.devicePixelRatio || 1;
+            const rect = signatureCanvas.getBoundingClientRect();
+            signatureCanvas.width = rect.width * dpr;
+            signatureCanvas.height = rect.height * dpr;
+            signatureContext.scale(dpr, dpr);
+            
+            // Set style properties
+            signatureContext.lineWidth = 2;
+            signatureContext.lineCap = 'round';
+            signatureContext.lineJoin = 'round';
+            signatureContext.strokeStyle = '#000000';
+
+            // Remove old listeners and set up new ones
+            const newCanvas = signatureCanvas.cloneNode(true);
+            signatureCanvas.parentNode.replaceChild(newCanvas, signatureCanvas);
+            signatureCanvas = newCanvas;
+            signatureContext = signatureCanvas.getContext('2d');
+            signatureContext.scale(dpr, dpr);
+            signatureContext.lineWidth = 2;
+            signatureContext.lineCap = 'round';
+            signatureContext.lineJoin = 'round';
+            signatureContext.strokeStyle = '#000000';
+            
+            signatureCanvas.addEventListener('mousedown', startDrawing, false);
+            signatureCanvas.addEventListener('mousemove', draw, false);
+            signatureCanvas.addEventListener('mouseup', stopDrawing, false);
+            signatureCanvas.addEventListener('mouseout', stopDrawing, false);
+
+            // Touch events
+            signatureCanvas.addEventListener('touchstart', handleTouch, false);
+            signatureCanvas.addEventListener('touchmove', handleTouch, false);
+            signatureCanvas.addEventListener('touchend', stopDrawing, false);
+        }
+
+        function startDrawing(e) {
+            if (!signatureCanvas || !signatureContext) return;
+            isDrawing = true;
+            const dpr = window.devicePixelRatio || 1;
+            const rect = signatureCanvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) / dpr;
+            const y = (e.clientY - rect.top) / dpr;
+            signatureContext.beginPath();
+            signatureContext.moveTo(x, y);
+        }
+
+        function draw(e) {
+            if (!isDrawing || !signatureCanvas || !signatureContext) return;
+            const dpr = window.devicePixelRatio || 1;
+            const rect = signatureCanvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) / dpr;
+            const y = (e.clientY - rect.top) / dpr;
+            signatureContext.lineTo(x, y);
+            signatureContext.stroke();
+        }
+
+        function stopDrawing() {
+            if (signatureContext) {
+                isDrawing = false;
+                signatureContext.closePath();
+            }
+        }
+
+        function handleTouch(e) {
+            e.preventDefault();
+            if (e.touches.length === 0) {
+                stopDrawing();
+                return;
+            }
+            const touch = e.touches[0];
+            
+            if (e.type === 'touchstart') {
+                startDrawing({clientX: touch.clientX, clientY: touch.clientY});
+            } else if (e.type === 'touchmove') {
+                draw({clientX: touch.clientX, clientY: touch.clientY});
+            } else if (e.type === 'touchend') {
+                stopDrawing();
+            }
+        }
+
+        function clearSignature() {
+            if (signatureContext) {
+                signatureContext.clearRect(0, 0, signatureCanvas.width, signatureCanvas.height);
+            }
+        }
+
+        function undoSignature() {
+            // Simple undo by clearing (can be enhanced with history)
+            clearSignature();
+        }
+
+        function loadAgreementPreview(bookingID, clientID) {
+            fetch(`./web/api/agreements/index.php?action=get_agreement&booking_id=${bookingID}&client_id=${clientID}`)
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Agreement API Response:', data);
+                    
+                    if (data.success) {
+                        if (data.agreement && data.agreement.ContractFile) {
+                            // Decode base64 HTML and display
+                            try {
+                                const html = atob(data.agreement.ContractFile);
+                                document.getElementById('agreementPreview').innerHTML = html;
+                            } catch (e) {
+                                console.error('Error decoding agreement:', e);
+                                document.getElementById('agreementPreview').innerHTML = '<p class="text-danger">Error loading agreement preview: ' + e.message + '</p>';
+                            }
+                        } else {
+                            document.getElementById('agreementPreview').innerHTML = '<p class="text-danger">Agreement found but no content. Server response: ' + JSON.stringify(data.agreement) + '</p>';
+                        }
+                    } else {
+                        document.getElementById('agreementPreview').innerHTML = '<p class="text-danger">Error: ' + data.message + '</p>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading agreement:', error);
+                    document.getElementById('agreementPreview').innerHTML = '<p class="text-danger">Error loading agreement: ' + error.message + '</p>';
+                });
+        }
+
+        function checkAgreementStatus(bookingID, clientID) {
+            fetch(`./web/api/agreements/index.php?action=get_agreement&booking_id=${bookingID}&client_id=${clientID}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.agreement.Status === 'signed') {
+                        document.getElementById('signatureSection').innerHTML = `
+                            <div class="alert alert-success">
+                                <i class="bi bi-check-circle me-2"></i>
+                                <strong>Agreement Signed</strong>
+                                <br>
+                                <small>Signed on: ${new Date(data.agreement.SignedDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</small>
+                            </div>
+                        `;
+                    }
+                })
+                .catch(error => console.error('Error checking status:', error));
+        }
+
+        function submitSignature() {
+            if (!signatureCanvas || signatureCanvas.toDataURL() === 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==') {
+                alert('Please draw your signature first');
+                return;
+            }
+
+            const signatureBase64 = signatureCanvas.toDataURL('image/png');
+
+            fetch('./web/api/agreements/index.php?action=save_signature', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    booking_id: currentBookingID,
+                    client_id: currentClientID,
+                    signature: signatureBase64
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Agreement signed successfully!');
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('agreementModal'));
+                    modal.hide();
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error submitting signature:', error);
+                alert('Error submitting signature');
+            });
+        }
+    </script>
 </body>
 </html>
