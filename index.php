@@ -159,7 +159,6 @@ $cartCount = isset($_SESSION['food_cart']) ? count($_SESSION['food_cart']) : 0;
             width: 100%;
         }
 
-        /* Underline effect for dropdown toggles - animated like progress bar */
         .nav-link.dropdown-toggle {
             position: relative;
         }
