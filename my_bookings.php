@@ -786,6 +786,7 @@ $stmt->close();
                                 <button class="btn btn-action btn-pay" 
                                     data-booking-id="<?= $booking['BookingID'] ?>"
                                     data-amount="<?= $booking['TotalAmount'] ?>"
+                                    data-event-date="<?= $booking['EventDate'] ?>"
                                     data-quotation-id="<?= $booking['QuotationID'] ?>"
                                     data-quotation-price="<?= $booking['QuotationPrice'] ?>"
                                     data-special-request-price="<?= $booking['SpecialRequestPrice'] ?? 0 ?>"
@@ -1058,6 +1059,28 @@ function showCashConfirmationModal(bookingId, method, amount) {
         existingModal.remove();
     }
     
+    // Calculate days until event - get event date from button data
+    const button = document.querySelector(`[data-booking-id="${bookingId}"]`);
+    const eventDate = button ? button.dataset.eventDate : null;
+    let daysWarning = '';
+    
+    if (eventDate) {
+        const today = new Date();
+        const eventDateObj = new Date(eventDate);
+        const daysUntilEvent = Math.ceil((eventDateObj - today) / (1000 * 60 * 60 * 24));
+        
+        if (daysUntilEvent <= 3 && daysUntilEvent > 0) {
+            daysWarning = `
+                <div class="alert alert-danger" style="border-radius: 10px; margin-bottom: 15px;">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <strong>⚠️ Important Notice:</strong><br>
+                    Payment must be made <strong>at least 3 days before</strong> your event date, or the booking will be cancelled.
+                    Your event is in <strong>${daysUntilEvent} day${daysUntilEvent !== 1 ? 's' : ''}</strong>.
+                </div>
+            `;
+        }
+    }
+    
     const modal = document.createElement('div');
     modal.className = 'cash-confirmation-modal';
     modal.innerHTML = `
@@ -1073,6 +1096,8 @@ function showCashConfirmationModal(bookingId, method, amount) {
                             <i class="bi bi-cash-stack" style="font-size: 4rem; color: #28a745;"></i>
                         </div>
                         
+                        ${daysWarning}
+                        
                         <div class="alert alert-info" style="border-radius: 10px;">
                             <i class="bi bi-info-circle me-2"></i>
                             <strong>Booking ID:</strong> #${bookingId}<br>
@@ -1082,9 +1107,9 @@ function showCashConfirmationModal(bookingId, method, amount) {
                         <div class="alert alert-success" style="border-radius: 10px;">
                             <h6><i class="bi bi-check-circle me-2"></i>Cash Payment Instructions</h6>
                             <ul class="mb-0">
-                                <li>Please prepare the exact amount on the event day</li>
                                 <li>Payment will be collected before the event starts</li>
                                 <li>A receipt will be provided upon payment</li>
+                                <li><strong>Payment must be made at least 3 days before your event or booking will be cancelled</strong></li>
                             </ul>
                         </div>
                         

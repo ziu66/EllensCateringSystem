@@ -2193,10 +2193,14 @@ function displayPendingPayments(payments) {
 
     tbody.innerHTML = payments.map(payment => {
         const eventDate = new Date(payment.EventDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const paymentMethod = payment.PaymentMethod || 'Pending Payment';
+        const today = new Date();
+        const eventDateObj = new Date(payment.EventDate);
+        const daysUntilEvent = Math.ceil((eventDateObj - today) / (1000 * 60 * 60 * 24));
+        const isWithin3Days = paymentMethod === 'Cash' && daysUntilEvent <= 3 && daysUntilEvent > 0;
         
         let methodBadgeStyle = 'background-color: #0d6efd; color: white;';
         let methodIcon = '';
-        const paymentMethod = payment.PaymentMethod || 'Pending Payment';
         
         if (paymentMethod === 'GCash') {
             methodIcon = '<i class="bi bi-phone-fill me-1"></i>';
@@ -2209,7 +2213,7 @@ function displayPendingPayments(payments) {
             methodBadgeStyle = 'background-color: #6f42c1; color: white;';
         }
         
-        // Get reference number - FIXED
+        // Get reference number - Cash doesn't need one
         let referenceNumber = '';
         let senderName = '';
         
@@ -2220,14 +2224,20 @@ function displayPendingPayments(payments) {
             senderName = payment.BankSenderName || '';
         }
         
-        const hasReference = !!referenceNumber;
+        // For Cash, no reference is needed. For others, check if reference exists
+        const hasReference = paymentMethod === 'Cash' || !!referenceNumber;
         const actualBookingId = payment.BookingID;
         const refEscaped = referenceNumber.replace(/'/g, "\\'");
         const senderEscaped = senderName.replace(/'/g, "\\'");
         
         return `
         <tr class="align-middle">
-            <td><span class="badge bg-light text-dark"><strong>#${actualBookingId}</strong></span></td>
+            <td>
+                <div>
+                    <span class="badge bg-light text-dark"><strong>#${actualBookingId}</strong></span>
+                    ${isWithin3Days ? `<div class="small mt-1"><span class="badge bg-danger">⚠️ Payment due in ${daysUntilEvent} day${daysUntilEvent !== 1 ? 's' : ''}</span></div>` : ''}
+                </div>
+            </td>
             <td>
                 <div class="fw-semibold">${payment.ClientName || 'N/A'}</div>
                 <small class="text-muted">${payment.ClientEmail || 'N/A'}</small>
@@ -2236,7 +2246,9 @@ function displayPendingPayments(payments) {
             <td><span class="fw-bold text-success">₱${parseFloat(payment.TotalAmount || 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}</span></td>
             <td><span class="payment-badge" style="${methodBadgeStyle}">${methodIcon}${paymentMethod}</span></td>
             <td>
-                ${hasReference ? `
+                ${paymentMethod === 'Cash' ? `
+                    <span class="text-muted small"><em>No reference needed</em></span>
+                ` : referenceNumber ? `
                     <div class="d-flex align-items-center gap-2">
                         <code style="background: #f5f5f5; padding: 6px 10px; border-radius: 4px; flex: 1; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85rem;" title="${refEscaped}">
                             ${refEscaped}
@@ -2246,7 +2258,7 @@ function displayPendingPayments(payments) {
                         </button>
                     </div>
                 ` : `
-                    <span class="text-muted small"><em>No reference provided</em></span>
+                    <span class="text-warning small"><em>Waiting for reference</em></span>
                 `}
             </td>
             <td class="text-center">
