@@ -1018,43 +1018,59 @@ foreach ($cartItems as $item) {
         <?php endif; ?>
     </div>
 
-    <!-- GCash QR Code Modal -->
-    <div id="gcashModal" class="gcash-modal">
-        <div class="gcash-modal-content">
-            <span class="close-modal" onclick="closeGCashModal()">&times;</span>
-            <div class="gcash-logo">
-                <i class="bi bi-phone-fill"></i>
-            </div>
-            <h3 style="color: var(--primary-dark); font-weight: 700; margin-bottom: 8px;">GCash Payment</h3>
-            <p style="color: var(--medium-gray); margin-bottom: 18px; font-size: 0.95rem;">Scan the QR code to pay</p>
-            
-            <div class="qr-code-container">
-                <img id="gcashQRCode" src="" alt="GCash QR Code" style="width: 220px; height: 220px;">
-            </div>
-            
-            <div style="background: #f0f8ff; padding: 15px; border-radius: 10px; margin: 18px 0;">
-                <p style="margin: 0; color: var(--text-dark); font-weight: 600; font-size: 0.9rem;">
-                    Ellen's Catering
-                </p>
-                <p style="margin: 8px 0 0 0; color: var(--text-dark); font-weight: 700; font-size: 1.2rem;">
-                    ₱<span id="gcashAmount">0.00</span>
-                </p>
-            </div>
-            
-            <p style="color: var(--medium-gray); font-size: 0.85rem; margin-bottom: 18px;">
-                <i class="bi bi-shield-check me-1"></i>
-                Keep your reference number for verification
-            </p>
-            
-            <button onclick="closeGCashModal()" class="btn-primary-custom" style="border: none;">
-                <i class="bi bi-check-circle me-2"></i>Done
-            </button>
+    <!-- GCash QR Code Modal (Replace existing modal in view_cart.php) -->
+<div id="gcashModal" class="gcash-modal" style="display: none;">
+    <div class="gcash-modal-content">
+        <span class="close-modal" onclick="closeGCashModal()">&times;</span>
+        <div class="gcash-logo">
+            <i class="bi bi-phone-fill"></i>
         </div>
+        <h2 style="color: var(--primary-dark); font-weight: 700; margin-bottom: 8px; font-size: 1.5rem;">GCash Payment</h2>
+        <p style="color: var(--medium-gray); margin-bottom: 15px; font-size: 0.95rem;">Scan the QR code below to complete your payment</p>
+        
+        <div class="qr-code-container">
+            <img id="gcashQRCode" src="gcash_qr.jpg" alt="GCash QR Code" style="width: 220px; height: 220px;">
+        </div>
+        
+        <div style="background: #f0f8ff; padding: 12px; border-radius: 10px; margin: 15px 0; font-size: 0.9rem;">
+            <p style="margin: 0; color: var(--text-dark); font-weight: 600;">
+                <i class="bi bi-info-circle me-2"></i>Account: Ellen's Catering
+            </p>
+            <p style="margin: 5px 0 0 0; color: var(--text-dark); font-weight: 600;">
+                <i class="bi bi-receipt me-2"></i>Order ID: #<span id="gcashOrderId"></span>
+            </p>
+            <p style="margin: 8px 0 0 0; color: var(--text-dark); font-weight: 700; font-size: 1.2rem;">
+                Amount: ₱<span id="gcashAmount">0.00</span>
+            </p>
+        </div>
+        
+        <div style="margin: 15px 0;">
+            <label style="display: block; margin-bottom: 8px; color: var(--text-dark); font-weight: 600; font-size: 0.95rem;">
+                <i class="bi bi-key me-1"></i>GCash Reference Number <span style="color: red;">*</span>
+            </label>
+            <input type="text" id="gcashRefNumber" placeholder="Enter your GCash reference number" 
+                   style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem;" maxlength="20">
+            <small style="color: #666; display: block; margin-top: 5px;">
+                <i class="bi bi-info-circle me-1"></i>You can find this in your GCash app after payment
+            </small>
+        </div>
+        
+        <p style="color: var(--medium-gray); font-size: 0.85rem; margin-bottom: 15px;">
+            <i class="bi bi-shield-check me-1"></i>
+            Keep your reference number for verification.
+        </p>
+        
+        <button onclick="completeGCashPayment()" type="button" style="background: var(--primary-dark); color: white; border: none; padding: 10px 25px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.95rem; width: 100%;">
+            <i class="bi bi-check-circle me-2"></i>I've Completed Payment
+        </button>
     </div>
-
+</div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         let selectedPaymentMethod = null;
+        let currentOrderId = null;
+        let currentOrderTotal = 0;
+
 
         function formatCardNumber(input) {
             let value = input.value.replace(/\D/g, '');
@@ -1192,72 +1208,316 @@ foreach ($cartItems as $item) {
         }
 
         function confirmOrder() {
-            if (!selectedPaymentMethod) {
-                alert('Please select a payment method');
-                return;
-            }
+    if (!selectedPaymentMethod) {
+        alert('Please select a payment method');
+        return;
+    }
 
-            if (selectedPaymentMethod === 'Bank Transfer') {
-                const cardNumber = document.getElementById('cardNumber').value.replace(/\s/g, '');
-                const cardholderName = document.getElementById('cardholderName').value.trim();
-                
-                if (!cardNumber || !cardholderName) {
-                    alert('Please fill in all card details');
-                    return;
-                }
-                
-                if (cardNumber.length !== 16) {
-                    alert('Please enter a valid 16-digit card number');
-                    return;
-                }
-            }
-
-            if (!confirm('Confirm order with ' + selectedPaymentMethod + '?')) return;
-            
-            const formData = new FormData();
-            formData.append('action', 'confirm');
-            formData.append('payment_method', selectedPaymentMethod);
-            
-            if (selectedPaymentMethod === 'Bank Transfer') {
-                formData.append('card_number', document.getElementById('cardNumber').value.replace(/\s/g, ''));
-                formData.append('cardholder_name', document.getElementById('cardholderName').value.trim());
-            }
-            
-            const confirmBtn = document.getElementById('confirmOrderBtn');
-            const originalText = confirmBtn.innerHTML;
-            confirmBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Processing...';
-            confirmBtn.disabled = true;
-
-            fetch('view_cart.php', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    if (data.show_gcash_qr) {
-                        const totalAmount = '<?= $cartTotal ?>';
-                        showGCashModal(totalAmount);
-                    } else if (data.show_bank_confirmation) {
-                        alert('Order confirmed!\nOrder ID: #' + data.order_id + '\nPayment: Bank Transfer');
-                        location.reload();
-                    } else {
-                        alert(data.message);
-                        location.reload();
-                    }
-                } else {
-                    alert(data.message || 'Failed to confirm order');
-                    confirmBtn.innerHTML = originalText;
-                    confirmBtn.disabled = false;
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred. Please try again.');
-                confirmBtn.innerHTML = originalText;
-                confirmBtn.disabled = false;
-            });
+    if (selectedPaymentMethod === 'Bank Transfer') {
+        const cardNumber = document.getElementById('cardNumber').value.replace(/\s/g, '');
+        const cardholderName = document.getElementById('cardholderName').value.trim();
+        
+        if (!cardNumber || !cardholderName) {
+            alert('Please fill in all card details');
+            return;
         }
+        
+        if (cardNumber.length !== 16) {
+            alert('Please enter a valid 16-digit card number');
+            return;
+        }
+    }
+
+    if (!confirm('Confirm order with ' + selectedPaymentMethod + '?')) return;
+    
+    const formData = new FormData();
+    formData.append('action', 'confirm');
+    formData.append('payment_method', selectedPaymentMethod);
+    
+    if (selectedPaymentMethod === 'Bank Transfer') {
+        formData.append('card_number', document.getElementById('cardNumber').value.replace(/\s/g, ''));
+        formData.append('cardholder_name', document.getElementById('cardholderName').value.trim());
+    }
+    
+    const confirmBtn = document.getElementById('confirmOrderBtn');
+    const originalText = confirmBtn.innerHTML;
+    confirmBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Processing...';
+    confirmBtn.disabled = true;
+
+    fetch('view_cart.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Store order details
+            currentOrderId = data.order_id;
+            currentOrderTotal = '<?= $cartTotal ?>';
+            
+            if (data.show_gcash_qr) {
+                showGCashReferenceModal(data.order_id, currentOrderTotal);
+            } else if (data.show_bank_confirmation) {
+                const cardNumber = document.getElementById('cardNumber').value.replace(/\s/g, '');
+                showBankReferenceModal(data.order_id, cardNumber, data.cardholder_name);
+            } else {
+                alert(data.message);
+                location.reload();
+            }
+        } else {
+            alert(data.message || 'Failed to confirm order');
+            confirmBtn.innerHTML = originalText;
+            confirmBtn.disabled = false;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred. Please try again.');
+        confirmBtn.innerHTML = originalText;
+        confirmBtn.disabled = false;
+    });
+}
+
+// GCash Reference Modal
+function showGCashReferenceModal(orderId, amount) {
+    const modal = document.getElementById('gcashModal');
+    if (!modal) {
+        console.error('GCash modal not found');
+        return;
+    }
+    
+    const amountDisplay = document.getElementById('gcashAmount');
+    const orderIdDisplay = document.getElementById('gcashOrderId');
+    const qrCode = document.getElementById('gcashQRCode');
+    
+    if (amountDisplay) {
+        amountDisplay.textContent = parseFloat(amount).toLocaleString('en-PH', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+    
+    if (orderIdDisplay) {
+        orderIdDisplay.textContent = orderId;
+    }
+    
+    if (qrCode) {
+        qrCode.src = 'gcash_qr.jpg';
+    }
+    
+    // Clear previous reference number
+    document.getElementById('gcashRefNumber').value = '';
+    
+    modal.style.display = 'block';
+    document.body.style.overflow = 'hidden';
+}
+
+function closeGCashModal() {
+    const modal = document.getElementById('gcashModal');
+    if (modal) {
+        modal.style.display = 'none';
+        document.body.style.overflow = 'auto';
+        location.reload();
+    }
+}
+
+function completeGCashPayment() {
+    const refNumber = document.getElementById('gcashRefNumber').value.trim();
+    
+    if (!refNumber) {
+        alert('Please enter your GCash reference number to proceed.');
+        return;
+    }
+    
+    if (refNumber.length < 5) {
+        alert('Please enter a valid reference number (at least 5 characters).');
+        return;
+    }
+    
+    if (!currentOrderId) {
+        alert('Error: Order ID not found. Please refresh and try again.');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('order_id', currentOrderId);
+    formData.append('gcash_reference', refNumber);
+    
+    const btn = event.target;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Saving...';
+    btn.disabled = true;
+    
+    fetch('process_cart_gcash_reference.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✓ GCash payment recorded!\n\nYour reference number has been saved. We will verify your payment shortly.');
+            closeGCashModal();
+        } else {
+            alert(data.message || 'Failed to save reference number');
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred. Please try again or contact support.');
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    });
+}
+
+// Bank Transfer Reference Modal
+function showBankReferenceModal(orderId, cardNumber, senderName) {
+    const modal = document.getElementById('bankReferenceModal');
+    if (!modal) {
+        // Create modal if it doesn't exist
+        const modalHTML = `
+            <div id="bankReferenceModal" class="gcash-modal" style="display: none;">
+                <div class="gcash-modal-content">
+                    <span class="close-modal" onclick="closeBankReferenceModal()">&times;</span>
+                    <div class="gcash-logo" style="color: #6f42c1;">
+                        <i class="bi bi-bank"></i>
+                    </div>
+                    <h2 style="color: var(--primary-dark); font-weight: 700; margin-bottom: 8px; font-size: 1.5rem;">Bank Transfer Details</h2>
+                    <p style="color: var(--medium-gray); margin-bottom: 15px; font-size: 0.95rem;">Please enter your bank transfer reference number</p>
+                    
+                    <div style="background: #f0f8ff; padding: 12px; border-radius: 10px; margin: 15px 0; font-size: 0.9rem;">
+                        <p style="margin: 0; color: var(--text-dark); font-weight: 600;">
+                            <i class="bi bi-info-circle me-2"></i>Transfer Method: Bank Transfer
+                        </p>
+                        <p style="margin: 5px 0 0 0; color: var(--text-dark); font-weight: 600;">
+                            <i class="bi bi-receipt me-2"></i>Order ID: #<span id="bankOrderId"></span>
+                        </p>
+                        <p style="margin: 8px 0 0 0; color: var(--text-dark); font-weight: 600;">
+                            <i class="bi bi-person me-2"></i>Sender: <span id="bankSenderName"></span>
+                        </p>
+                        <p style="margin: 8px 0 0 0; color: var(--text-dark); font-weight: 600;">
+                            <i class="bi bi-credit-card me-2"></i>Card: **** **** **** <span id="bankCardLast4"></span>
+                        </p>
+                    </div>
+                    
+                    <div style="margin: 15px 0;">
+                        <label style="display: block; margin-bottom: 8px; color: var(--text-dark); font-weight: 600; font-size: 0.95rem;">
+                            <i class="bi bi-key me-1"></i>Bank Reference Number <span style="color: red;">*</span>
+                        </label>
+                        <input type="text" id="bankRefNumber" placeholder="Enter your bank reference number" 
+                               style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem;" maxlength="50">
+                        <small style="color: #666; display: block; margin-top: 5px;">
+                            <i class="bi bi-info-circle me-1"></i>You can find this in your bank app or transaction receipt
+                        </small>
+                    </div>
+                    
+                    <p style="color: var(--medium-gray); font-size: 0.85rem; margin-bottom: 15px;">
+                        <i class="bi bi-shield-check me-1"></i>
+                        Keep your reference number for verification.
+                    </p>
+                    
+                    <button onclick="completeBankTransfer()" type="button" style="background: var(--primary-dark); color: white; border: none; padding: 10px 25px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.95rem; width: 100%;">
+                        <i class="bi bi-check-circle me-2"></i>I've Completed Transfer
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+    }
+    
+    // Populate modal data
+    document.getElementById('bankOrderId').textContent = orderId;
+    document.getElementById('bankSenderName').textContent = senderName;
+    document.getElementById('bankCardLast4').textContent = cardNumber.slice(-4);
+    document.getElementById('bankRefNumber').value = '';
+    
+    // Store data for submission
+    window.currentBankTransfer = {
+        orderId: orderId,
+        cardNumber: cardNumber,
+        senderName: senderName
+    };
+    
+    // Show modal
+    const bankModal = document.getElementById('bankReferenceModal');
+    bankModal.style.display = 'block';
+    document.body.style.overflow = 'hidden';
+}
+
+function closeBankReferenceModal() {
+    const modal = document.getElementById('bankReferenceModal');
+    if (modal) {
+        modal.style.display = 'none';
+        document.body.style.overflow = 'auto';
+        location.reload();
+    }
+}
+
+function completeBankTransfer() {
+    const refNumber = document.getElementById('bankRefNumber').value.trim();
+    
+    if (!refNumber) {
+        alert('Please enter your bank reference number to proceed.');
+        return;
+    }
+    
+    if (refNumber.length < 5) {
+        alert('Please enter a valid reference number (at least 5 characters).');
+        return;
+    }
+    
+    if (!window.currentBankTransfer) {
+        alert('Error: Transfer data not found. Please try again.');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('order_id', window.currentBankTransfer.orderId);
+    formData.append('bank_reference', refNumber);
+    formData.append('sender_name', window.currentBankTransfer.senderName);
+    
+    const btn = event.target;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Saving...';
+    btn.disabled = true;
+    
+    fetch('process_cart_bank_reference.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✓ Bank transfer recorded!\n\nYour reference number has been saved. We will verify your payment shortly.');
+            closeBankReferenceModal();
+        } else {
+            alert(data.message || 'Failed to save reference number');
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred. Please try again or contact support.');
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    });
+}
+
+// Close modals when clicking outside
+window.onclick = function(event) {
+    const gcashModal = document.getElementById('gcashModal');
+    const bankModal = document.getElementById('bankReferenceModal');
+    
+    if (event.target == gcashModal) {
+        closeGCashModal();
+    }
+    if (event.target == bankModal) {
+        closeBankReferenceModal();
+    }
+}
+
 
         <?php if (!$isLoggedIn): ?>
         function loadGuestCart() {
