@@ -1656,6 +1656,21 @@ window.onclick = function(event) {
         
         document.addEventListener('DOMContentLoaded', loadGuestCart);
         <?php endif; ?>
+
+    // client-side: enforce numeric-only references while typing
+    document.addEventListener('DOMContentLoaded', function () {
+        const gcash = document.querySelector('input[name="gcash_reference"], #gcash_reference');
+        if (gcash) gcash.addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, ''); });
+
+        const bankRef = document.querySelector('input[name="bank_reference"], #bank_reference');
+        if (bankRef) bankRef.addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, ''); });
+
+        const sender = document.querySelector('input[name="sender_name"], #sender_name');
+        if (sender) sender.addEventListener('input', e => {
+            // allow letters, spaces, dot and hyphen only
+            e.target.value = e.target.value.replace(/[^0-9\p{L}\s\.\-]/gu, '').slice(0, 100);
+        });
+    });
     </script>
 </body>
 </html>

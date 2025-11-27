@@ -23,13 +23,15 @@ try {
         exit;
     }
     
-    if (strlen($bankReference) < 5 || strlen($bankReference) > 50) {
-        echo json_encode(['success' => false, 'message' => 'Reference number must be between 5 and 50 characters']);
+    // validate bank reference: digits only, length 5-30
+    if (!preg_match('/^\d{5,30}$/', $bankReference)) {
+        echo json_encode(['success' => false, 'message' => 'Bank reference must be numeric and 5-30 digits long']);
         exit;
     }
     
-    if (strlen($senderName) < 3 || strlen($senderName) > 100) {
-        echo json_encode(['success' => false, 'message' => 'Sender name must be between 3 and 100 characters']);
+    // validate sender name (basic): allow letters, spaces, dots, hyphens, max 100 chars
+    if (!preg_match('/^[\p{L}\s\.\-]{2,100}$/u', $senderName)) {
+        echo json_encode(['success' => false, 'message' => 'Invalid sender name']);
         exit;
     }
     

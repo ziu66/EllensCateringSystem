@@ -22,8 +22,9 @@ try {
         exit;
     }
     
-    if (strlen($gcashReference) < 5 || strlen($gcashReference) > 50) {
-        echo json_encode(['success' => false, 'message' => 'Reference number must be between 5 and 50 characters']);
+    // validate: digits only, length 5-20
+    if (!preg_match('/^\d{5,20}$/', $gcashReference)) {
+        echo json_encode(['success' => false, 'message' => 'Reference must be numeric and 5-20 digits long']);
         exit;
     }
     
