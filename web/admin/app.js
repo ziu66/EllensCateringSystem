@@ -1,7 +1,6 @@
 // API Configuration
 const API_BASE = '../api/';
 
-// Check authentication
 function checkAuth() {
     fetch(API_BASE + 'auth/check.php', {
             method: 'GET',
