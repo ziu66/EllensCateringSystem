@@ -1,3 +1,103 @@
+/* ========================================
+   PREVENT LAYOUT SHIFT - REAL FIX
+   ======================================== */
+
+html {
+    overflow-y: scroll !important;
+    overflow-x: hidden !important;
+    scrollbar-gutter: stable;
+}
+
+body {
+    overflow-y: scroll !important;
+    overflow-x: hidden !important;
+    padding-right: 0 !important;
+    margin-right: 0 !important;
+    width: 100% !important;
+    position: relative;
+}
+
+
+/* Force body to NEVER hide overflow when panel is open */
+
+body.slide-panel-open {
+    overflow: scroll !important;
+    overflow-y: scroll !important;
+    overflow-x: hidden !important;
+    padding-right: 0 !important;
+    margin-right: 0 !important;
+}
+
+
+/* CRITICAL: Override ALL Bootstrap modal body modifications */
+
+body.modal-open {
+    overflow-y: scroll !important;
+    overflow-x: hidden !important;
+    padding-right: 0 !important;
+    margin-right: 0 !important;
+    width: 100% !important;
+    position: relative;
+}
+
+
+/* Sidebar MUST stay fixed and unchanged */
+
+.sidebar {
+    position: fixed !important;
+    width: 250px !important;
+    left: 0 !important;
+    top: 0 !important;
+    height: 100vh !important;
+    z-index: 1000 !important;
+    padding-right: 0 !important;
+    margin-right: 0 !important;
+    will-change: transform;
+}
+
+
+/* Main content MUST have exact margin */
+
+.main-content {
+    margin-left: 250px !important;
+    margin-right: 0 !important;
+    padding-right: 0 !important;
+    width: calc(100% - 250px) !important;
+    padding: 2rem;
+    min-height: 100vh;
+    background-color: var(--light-gray);
+    will-change: transform;
+}
+
+.page-header {
+    margin-right: 0 !important;
+    padding-right: 0 !important;
+    width: 100% !important;
+    margin-left: 0 !important;
+}
+
+.page-content {
+    margin-right: 0 !important;
+    padding-right: 0 !important;
+    width: 100% !important;
+}
+
+
+/* Override Bootstrap modal styles */
+
+.modal-backdrop {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.modal {
+    padding-right: 0 !important;
+}
+
+
 /* Custom Styles for Catering Admin */
 
 :root {
@@ -159,7 +259,7 @@ body {
 
 .table-hover tbody tr:hover {
     background-color: #f8f9fa;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
 }
 
 .table-light thead {
@@ -176,6 +276,7 @@ body {
     letter-spacing: 0.5px;
     padding: 1rem;
 }
+
 
 /* Enhanced Payment Tables */
 
@@ -204,6 +305,7 @@ body {
     opacity: 0.8;
 }
 
+
 /* Badge Styles */
 
 .badge {
@@ -212,7 +314,9 @@ body {
     letter-spacing: 0.5px;
 }
 
+
 /* Payment badge: icon + label with good contrast */
+
 .payment-badge {
     display: inline-flex;
     align-items: center;
@@ -222,12 +326,15 @@ body {
     font-weight: 600;
     font-size: 0.9rem;
 }
+
 .payment-badge .bi {
     font-size: 1.05rem;
     opacity: 0.95;
 }
 
+
 /* Table title/caption styling for payments tables */
+
 .table-title {
     caption-side: top;
     text-align: left;
@@ -254,6 +361,7 @@ body {
     color: #000;
 }
 
+
 /* Button Enhancements */
 
 .btn-sm {
@@ -270,6 +378,7 @@ body {
     background-color: #218838;
     border-color: #1e7e34;
 }
+
 
 /* Input Enhancements */
 
@@ -597,6 +706,7 @@ body {
     font-size: 1.25rem;
 }
 
+
 /* Toast Animations */
 
 @keyframes slideIn {
@@ -636,5 +746,166 @@ body {
         box-shadow: none;
         border: 1px solid #000;
         page-break-inside: avoid;
+    }
+}
+
+
+/* ========================================
+   SLIDE-IN PANEL FOR AGREEMENT DETAILS
+   ======================================== */
+
+
+/* Overlay backdrop */
+
+.slide-panel-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 9998;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.slide-panel-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+
+/* Slide-in panel */
+
+.slide-panel {
+    position: fixed;
+    top: 0;
+    right: -100%;
+    width: 90%;
+    max-width: 800px;
+    height: 100%;
+    background: white;
+    z-index: 9999;
+    box-shadow: -5px 0 25px rgba(0, 0, 0, 0.3);
+    transition: right 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+    display: flex;
+    flex-direction: column;
+}
+
+.slide-panel.active {
+    right: 0;
+}
+
+
+/* Panel header */
+
+.slide-panel-header {
+    background: #000;
+    color: white;
+    padding: 1.5rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #333;
+    flex-shrink: 0;
+}
+
+.slide-panel-header h5 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.slide-panel-close {
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    transition: transform 0.2s ease;
+}
+
+.slide-panel-close:hover {
+    transform: scale(1.1);
+}
+
+
+/* Panel body */
+
+.slide-panel-body {
+    padding: 2rem;
+    overflow-y: auto;
+    flex: 1;
+}
+
+
+/* Panel footer */
+
+.slide-panel-footer {
+    padding: 1.5rem 2rem;
+    border-top: 1px solid #dee2e6;
+    background: #f8f9fa;
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    flex-shrink: 0;
+}
+
+
+/* Agreement content styling */
+
+.agreement-content {
+    font-family: 'Times New Roman', Times, serif;
+    line-height: 1.8;
+}
+
+.agreement-content h1 {
+    text-align: center;
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 2rem;
+    text-transform: uppercase;
+}
+
+.agreement-content h4 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+}
+
+.agreement-content table {
+    width: 100%;
+    margin: 1.5rem 0;
+    border-collapse: collapse;
+}
+
+.agreement-content table td {
+    padding: 0.75rem;
+    border: 1px solid #dee2e6;
+}
+
+.agreement-content table td:first-child {
+    font-weight: 600;
+    width: 40%;
+    background: #f8f9fa;
+}
+
+
+/* Responsive */
+
+@media (max-width: 768px) {
+    .slide-panel {
+        width: 100%;
+        max-width: 100%;
+    }
+    .slide-panel-body {
+        padding: 1.5rem;
     }
 }

@@ -83,21 +83,35 @@ if ($action === 'get_agreement' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     $bookingID = intval($_GET['booking_id'] ?? 0);
     $clientID = intval($_GET['client_id'] ?? 0);
     
-    if (!$bookingID || !$clientID) {
-        echo json_encode(['success' => false, 'message' => 'Missing required fields']);
+    if (!$bookingID) {
+        echo json_encode(['success' => false, 'message' => 'Missing booking ID']);
         exit;
     }
     
+    // ✅ FIX: Allow admin to view agreements (client_id = 0 means admin request)
+    $isAdminRequest = ($clientID === 0);
+    
     try {
         // First check if agreement exists
-        $checkStmt = $conn->prepare("
-            SELECT a.AgreementID, a.Status, a.SignedDate, a.CustomerSignature, a.ContractFile
-            FROM agreement a
-            JOIN booking b ON a.BookingID = b.BookingID
-            WHERE a.BookingID = ? AND b.ClientID = ?
-        ");
-        
-        $checkStmt->bind_param("ii", $bookingID, $clientID);
+        // ✅ FIX: Different query for admin vs client
+        if ($isAdminRequest) {
+            // Admin can view any agreement
+            $checkStmt = $conn->prepare("
+                SELECT a.AgreementID, a.Status, a.SignedDate, a.CustomerSignature, a.ContractFile
+                FROM agreement a
+                WHERE a.BookingID = ?
+            ");
+            $checkStmt->bind_param("i", $bookingID);
+        } else {
+            // Client can only view their own agreement
+            $checkStmt = $conn->prepare("
+                SELECT a.AgreementID, a.Status, a.SignedDate, a.CustomerSignature, a.ContractFile
+                FROM agreement a
+                JOIN booking b ON a.BookingID = b.BookingID
+                WHERE a.BookingID = ? AND b.ClientID = ?
+            ");
+            $checkStmt->bind_param("ii", $bookingID, $clientID);
+        }
         $checkStmt->execute();
         $result = $checkStmt->get_result();
         
@@ -116,7 +130,24 @@ if ($action === 'get_agreement' && $_SERVER['REQUEST_METHOD'] === 'GET') {
             file_put_contents('php://stderr', "API: ContractFile is empty for booking $bookingID, generating on-the-fly...\n");
             error_log("DEBUG: ContractFile is empty for booking $bookingID, generating on-the-fly...");
             require_once '../../../includes/pdf_generator.php';
-            $pdfContent = generateAgreementPDF($bookingID, $clientID, $conn);
+            
+            // ✅ FIX: Get the actual clientID from the booking if admin request
+            if ($isAdminRequest) {
+                $clientIDStmt = $conn->prepare("SELECT ClientID FROM booking WHERE BookingID = ?");
+                $clientIDStmt->bind_param("i", $bookingID);
+                $clientIDStmt->execute();
+                $clientIDResult = $clientIDStmt->get_result();
+                if ($clientIDResult->num_rows > 0) {
+                    $actualClientID = $clientIDResult->fetch_assoc()['ClientID'];
+                } else {
+                    $actualClientID = $clientID;
+                }
+                $clientIDStmt->close();
+            } else {
+                $actualClientID = $clientID;
+            }
+            
+            $pdfContent = generateAgreementPDF($bookingID, $actualClientID, $conn);
             
             file_put_contents('php://stderr', "API: PDF generation returned: " . ($pdfContent ? "SUCCESS (" . strlen($pdfContent) . " bytes)" : "FALSE") . "\n");
             error_log("DEBUG: PDF generation returned: " . ($pdfContent ? "SUCCESS (" . strlen($pdfContent) . " bytes)" : "FALSE"));
@@ -183,7 +214,7 @@ if ($action === 'admin_get_agreement' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     try {
         $stmt = $conn->prepare("
             SELECT a.AgreementID, a.Status, a.SignedDate, a.CustomerSignature, a.ContractFile, 
-                   c.FirstName, c.LastName, b.EventDate
+                   c.Name, b.EventDate
             FROM agreement a
             JOIN booking b ON a.BookingID = b.BookingID
             JOIN client c ON b.ClientID = c.ClientID

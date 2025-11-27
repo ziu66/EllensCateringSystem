@@ -17,12 +17,33 @@ $adminId = $_SESSION['admin_id'] ?? 0;
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Catering Admin Dashboard</title>
+    
+    <!-- CRITICAL: This MUST be FIRST before any other CSS -->
+    <style>
+        /* Nuclear option - inline critical CSS that loads first */
+        html {
+            overflow-y: scroll !important;
+            overflow-x: hidden !important;
+        }
+        body {
+            overflow-y: scroll !important;
+            overflow-x: hidden !important;
+        }
+        body.modal-open {
+            overflow-y: scroll !important;
+            overflow-x: hidden !important;
+            padding-right: 0 !important;
+        }
+    </style>
+    
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
+
+
     <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
@@ -434,43 +455,323 @@ $adminId = $_SESSION['admin_id'] ?? 0;
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
-    <script src="app.js"></script>
-    <script>
-        // Logout function
-function logout() {
-    if (confirm('Are you sure you want to logout?')) {
-        fetch('../api/auth/logout.php', {
-            method: 'POST',
-            credentials: 'include'
-        })
-        .then(response => response.json())
-        .then(data => {
-            window.location.href = '../../login_dashboard.php';
-        })
-        .catch(error => {
-            console.error('Logout error:', error);
-            window.location.href = '../../login_dashboard.php';
-        });
-    }
-}
 
 <script>
-// Price preview calculator for menu form
-document.addEventListener('DOMContentLoaded', function() {
-    const priceInput = document.querySelector('#addMenuForm input[name="menu_price"]');
+/* --- Prevent page shift when showing modals / panels ---
+   Inserted AFTER bootstrap.bundle so `bootstrap` is defined.
+   This script:
+   1) clears inline padding-right/margin-right that Bootstrap sets
+   2) removes modal-open class if set
+   3) patches bootstrap.Modal.show to reset spacing after show
+   4) observes style/class changes to auto-reset
+*/
+(function() {
+    function resetBodySpacing() {
+        try {
+            // Use setProperty so it can apply with a priority similar to !important
+            document.body.style.setProperty('padding-right', '0px', 'important');
+            document.body.style.setProperty('margin-right', '0px', 'important');
+        } catch (e) {
+            // fallback
+            document.body.style.paddingRight = '0px';
+            document.body.style.marginRight  = '0px';
+        }
+        document.body.classList.remove('modal-open');
+    }
+
+    // Initial reset in case something already set inline styles
+    resetBodySpacing();
+
+    // If Bootstrap exists, monkey-patch Modal.show to call reset shortly after opening
+    if (window.bootstrap && bootstrap.Modal && bootstrap.Modal.prototype) {
+        const origShow = bootstrap.Modal.prototype.show;
+        bootstrap.Modal.prototype.show = function() {
+            origShow.call(this);                 // run native behavior
+            setTimeout(resetBodySpacing, 10);   // then reset spacing
+        };
+    }
+
+    // Observe inline style changes on body and reset if needed
+    const styleObserver = new MutationObserver(mutations => {
+        for (const m of mutations) {
+            if (m.type === 'attributes' && m.attributeName === 'style') {
+                const pr = document.body.style.getPropertyValue('padding-right');
+                const mr = document.body.style.getPropertyValue('margin-right');
+                if ((pr && pr !== '0px' && pr !== '0') || (mr && mr !== '0px' && mr !== '0')) {
+                    resetBodySpacing();
+                }
+            }
+        }
+    });
+    styleObserver.observe(document.body, { attributes: true, attributeFilter: ['style'] });
+
+    // Observe class changes (to remove modal-open if added)
+    const classObserver = new MutationObserver(mutations => {
+        for (const m of mutations) {
+            if (m.type === 'attributes' && m.attributeName === 'class') {
+                if (document.body.classList.contains('modal-open')) {
+                    document.body.classList.remove('modal-open');
+                    resetBodySpacing();
+                }
+            }
+        }
+    });
+    classObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
+})();
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+<script src="app.js"></script>
+
     
-    if (priceInput) {
-        priceInput.addEventListener('input', function() {
-            const basePrice = parseFloat(this.value) || 0;
-            document.getElementById('priceSmall').textContent = basePrice.toFixed(2);
-            document.getElementById('priceMedium').textContent = (basePrice * 1.4).toFixed(2);
-            document.getElementById('priceLarge').textContent = (basePrice * 1.95).toFixed(2);
+    <script>
+        // Logout function
+        function logout() {
+            if (confirm('Are you sure you want to logout?')) {
+                fetch('../api/auth/logout.php', {
+                    method: 'POST',
+                    credentials: 'include'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    window.location.href = '../../login_dashboard.php';
+                })
+                .catch(error => {
+                    console.error('Logout error:', error);
+                    window.location.href = '../../login_dashboard.php';
+                });
+            }
+        }
+
+        // Price preview calculator for menu form
+        document.addEventListener('DOMContentLoaded', function() {
+            const priceInput = document.querySelector('#addMenuForm input[name="menu_price"]');
+            
+            if (priceInput) {
+                priceInput.addEventListener('input', function() {
+                    const basePrice = parseFloat(this.value) || 0;
+                    document.getElementById('priceSmall').textContent = basePrice.toFixed(2);
+                    document.getElementById('priceMedium').textContent = (basePrice * 1.4).toFixed(2);
+                    document.getElementById('priceLarge').textContent = (basePrice * 1.95).toFixed(2);
+                });
+            }
         });
+    </script>
+
+
+<!-- Add this HTML to your dashboard.php, BEFORE the closing </body> tag -->
+
+<!-- Slide-in Panel Overlay -->
+<div class="slide-panel-overlay" id="agreementPanelOverlay" onclick="closeAgreementPanel()"></div>
+
+<!-- Slide-in Panel -->
+<div class="slide-panel" id="agreementPanel">
+    <div class="slide-panel-header">
+        <h5><i class="bi bi-file-text"></i> Agreement Details</h5>
+        <button class="slide-panel-close" onclick="closeAgreementPanel()">&times;</button>
+    </div>
+    
+    <div class="slide-panel-body" id="agreementPanelContent">
+        <!-- Agreement content will be loaded here -->
+        <div class="text-center py-5">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="slide-panel-footer">
+        <button class="btn btn-secondary" onclick="closeAgreementPanel()">
+            <i class="bi bi-x-circle me-2"></i>Close
+        </button>
+        <button class="btn btn-info" onclick="printAgreement()">
+            <i class="bi bi-printer me-2"></i>Print
+        </button>
+        <button class="btn btn-primary" onclick="downloadAgreementPDF()">
+            <i class="bi bi-download me-2"></i>Download PDF
+        </button>
+    </div>
+</div>
+
+<script>
+
+// In the script section, replace the openAgreementPanel function with this:
+
+// Open Agreement Panel
+function openAgreementPanel(bookingId) {
+    const panel   = document.getElementById('agreementPanel');
+    const overlay = document.getElementById('agreementPanelOverlay');
+    const content = document.getElementById('agreementPanelContent');
+
+    // Show overlay and panel
+    overlay.classList.add('active');
+    panel.classList.add('active');
+
+    // CRITICAL: Keep scrollbar visible, don't hide overflow
+    try {
+        document.body.style.setProperty('padding-right', '0px', 'important');
+        document.body.style.setProperty('margin-right', '0px', 'important');
+        document.body.style.setProperty('overflow', 'scroll', 'important'); // Force scroll, not hidden
+        document.body.style.setProperty('overflow-y', 'scroll', 'important');
+        document.body.style.setProperty('overflow-x', 'hidden', 'important');
+    } catch (e) {
+        document.body.style.paddingRight = '0px';
+        document.body.style.marginRight  = '0px';
+        document.body.style.overflow = 'scroll';
+        document.body.style.overflowY = 'scroll';
+        document.body.style.overflowX = 'hidden';
+    }
+    document.body.classList.remove('modal-open');
+
+    // Show loading + load content
+    content.innerHTML = `
+        <div class="text-center py-5">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-3">Loading agreement details...</p>
+        </div>
+    `;
+    loadAgreementContent(bookingId);
+}
+
+// Close Agreement Panel
+function closeAgreementPanel() {
+    const panel   = document.getElementById('agreementPanel');
+    const overlay = document.getElementById('agreementPanelOverlay');
+
+    overlay.classList.remove('active');
+    panel.classList.remove('active');
+
+    // CRITICAL: Keep scrollbar visible
+    try {
+        document.body.style.setProperty('padding-right', '0px', 'important');
+        document.body.style.setProperty('margin-right', '0px', 'important');
+        document.body.style.setProperty('overflow', 'scroll', 'important');
+        document.body.style.setProperty('overflow-y', 'scroll', 'important');
+        document.body.style.setProperty('overflow-x', 'hidden', 'important');
+    } catch (e) {
+        document.body.style.paddingRight = '0px';
+        document.body.style.marginRight  = '0px';
+        document.body.style.overflow = 'scroll';
+        document.body.style.overflowY = 'scroll';
+        document.body.style.overflowX = 'hidden';
+    }
+    document.body.classList.remove('modal-open');
+}
+
+
+
+// Load Agreement Content
+function loadAgreementContent(bookingId) {
+    const content = document.getElementById('agreementPanelContent');
+    
+    fetch(`../../web/api/agreements/index.php?action=admin_get_agreement&booking_id=${bookingId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.agreement) {
+                const agreement = data.agreement;
+                
+                content.innerHTML = `
+                    <div class="agreement-content">
+                        <h1>CATERING AGREEMENT</h1>
+                        
+                        <p>
+                            This Catering Agreement (hereinafter referred to as the <strong>"Agreement"</strong>) is entered into on 
+                            <strong>${agreement.EffectiveDate || 'N/A'}</strong>, (the <strong>"Effective date"</strong>), by and between 
+                            <strong>${agreement.ClientName || 'N/A'}</strong> (hereinafter referred to as <strong>"Client"</strong>) and 
+                            <strong>Elma M. Barcelon</strong>, with an address of 
+                            <strong>${agreement.Address || 'N/A'}</strong> (hereinafter referred to as the <strong>"Caterer"</strong>) 
+                            collectively referred to as the <strong>"Parties"</strong>, both of whom agree to be bound by this agreement.
+                        </p>
+                        
+                        <p>
+                            The <strong>Caterer</strong> guarantees that all food will be prepared, stored, and served in compliance 
+                            with all applicable health and safety regulations to prevent contamination or foodborne illness caused by 
+                            the food provided. <strong>The Caterer agrees to assume full responsibility and indemnify the Client for 
+                            any resulting medical cost or liabilities.</strong>
+                        </p>
+                        
+                        <h4>EVENT DATE AND LOCATION</h4>
+                        <p>The event will occur on <strong>${agreement.EventDate || 'N/A'}</strong>. It will be located at <strong>${agreement.Location || 'N/A'}</strong>.</p>
+                        
+                        <h4>EVENT DETAILS</h4>
+                        <table>
+                            <tr>
+                                <td>Event Type:</td>
+                                <td>${agreement.EventType || 'N/A'}</td>
+                            </tr>
+                            <tr>
+                                <td>Number of Guests:</td>
+                                <td>${agreement.NumberOfGuests || '0'}</td>
+                            </tr>
+                            <tr>
+                                <td>Special Requests:</td>
+                                <td>${agreement.SpecialRequests || 'none'}</td>
+                            </tr>
+                        </table>
+                        
+                        <h4>OVERALL TOTAL</h4>
+                        <div class="alert alert-success text-center">
+                            <h3 class="mb-0">₱${parseFloat(agreement.TotalAmount || 0).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</h3>
+                        </div>
+                    </div>
+                `;
+            } else {
+                content.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Failed to load agreement details. Please try again.
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error loading agreement:', error);
+            content.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    Error loading agreement: ${error.message}
+                </div>
+            `;
+        });
+}
+
+// Print Agreement
+function printAgreement() {
+    const content = document.getElementById('agreementPanelContent').innerHTML;
+    const printWindow = window.open('', '', 'height=600,width=800');
+    printWindow.document.write(`
+        <html>
+        <head>
+            <title>Print Agreement</title>
+            <style>
+                body { font-family: 'Times New Roman', Times, serif; padding: 40px; }
+                h1 { text-align: center; }
+                table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+                table td { padding: 10px; border: 1px solid #000; }
+            </style>
+        </head>
+        <body>${content}</body>
+        </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+}
+
+// Download PDF (placeholder - you'll need to implement actual PDF generation)
+function downloadAgreementPDF() {
+    alert('PDF download functionality - implement with jsPDF or similar library');
+}
+
+// Close panel with ESC key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeAgreementPanel();
     }
 });
 </script>
-    </script>
-</body>
 
+</body>
 </html>

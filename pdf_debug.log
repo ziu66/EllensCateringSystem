@@ -2,3 +2,19 @@
 [2025-11-27 20:30:50] Using MySQLi connection
 [2025-11-27 20:30:50] Found booking - Wedding on 2025-12-04
 [2025-11-27 20:30:50] Successfully created base64 PDF of 7548 bytes
+[2025-11-27 21:05:57] Starting PDF generation for Booking 53, Client 4
+[2025-11-27 21:05:57] Using MySQLi connection
+[2025-11-27 21:05:57] Found booking - Team Building Package on 2025-12-06
+[2025-11-27 21:05:57] Successfully created base64 PDF of 7380 bytes
+[2025-11-27 21:17:00] Starting PDF generation for Booking 53, Client 4
+[2025-11-27 21:17:00] Using MySQLi connection
+[2025-11-27 21:17:00] Found booking - Team Building Package on 2025-12-06
+[2025-11-27 21:17:00] Successfully created base64 PDF of 7380 bytes
+[2025-11-27 21:30:40] Starting PDF generation for Booking 54, Client 4
+[2025-11-27 21:30:40] Using MySQLi connection
+[2025-11-27 21:30:40] Found booking - Birthday Package on 2026-02-26
+[2025-11-27 21:30:40] Successfully created base64 PDF of 7376 bytes
+[2025-11-27 21:30:50] Starting PDF generation for Booking 54, Client 4
+[2025-11-27 21:30:50] Using MySQLi connection
+[2025-11-27 21:30:50] Found booking - Birthday Package on 2026-02-26
+[2025-11-27 21:30:50] Successfully created base64 PDF of 7376 bytes

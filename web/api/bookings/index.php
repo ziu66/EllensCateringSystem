@@ -24,9 +24,19 @@ require_once '../middleware/auth.php';
 // Check if this is a customer payment method request (doesn't require admin auth)
 $isPaymentMethodRequest = ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action']) && $_GET['action'] === 'save_payment_method');
 
-// Only require admin authentication for non-payment-method requests
-if (!$isPaymentMethodRequest) {
+// Check if this is a monthly revenue request (dashboard chart - requires auth but handled differently)
+$isMonthlyRevenueRequest = ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['action'] === 'monthly_revenue');
+
+// Only require admin authentication for non-public requests
+if (!$isPaymentMethodRequest && !$isMonthlyRevenueRequest) {
     requireAuth();
+} elseif ($isMonthlyRevenueRequest) {
+    // For monthly revenue, check if user is authenticated
+    session_start();
+    if (!isset($_SESSION['user_id']) || !isset($_SESSION['user_role'])) {
+        sendResponse(false, 'Authentication required', ['authenticated' => false], 401);
+        exit;
+    }
 }
 
 // Get database connection
@@ -66,10 +76,15 @@ if ($method === 'PATCH') {
 // Route to appropriate handler
 switch ($method) {
     case 'GET':
+        // ✅ ADD THIS NEW CHECK FIRST
+        if (isset($_GET['action']) && $_GET['action'] === 'monthly_revenue') {
+            handleGetMonthlyRevenue($conn);
+        }
         // Check if requesting pending payments (admin only)
-        if (isset($_GET['pending']) && $_GET['pending'] === 'true') {
+        elseif (isset($_GET['pending']) && $_GET['pending'] === 'true') {
             handleGetPendingPayments($conn);
-        } else {
+        } 
+        else {
             handleGetBookings($conn);
         }
         break;
@@ -566,6 +581,41 @@ function handleGetBookings($conn) {
     } catch (PDOException $e) {
         error_log("Get Bookings Error: " . $e->getMessage());
         sendResponse(false, 'Error retrieving bookings', null, 500);
+    }
+}
+
+function handleGetMonthlyRevenue($conn) {
+    try {
+        $year = $_GET['year'] ?? date('Y');
+        
+        // Fixed query - gets ALL months with revenue data
+        $query = "SELECT 
+                    MONTHNAME(EventDate) as month,
+                    MONTH(EventDate) as month_num,
+                    SUM(TotalAmount) as revenue
+                  FROM booking
+                  WHERE YEAR(EventDate) = :year
+                    AND TotalAmount IS NOT NULL
+                    AND TotalAmount > 0
+                    AND Status IN ('Confirmed', 'Completed', 'Pending')
+                  GROUP BY MONTH(EventDate), MONTHNAME(EventDate)
+                  ORDER BY MONTH(EventDate)";
+        
+        $stmt = $conn->prepare($query);
+        $stmt->execute([':year' => $year]);
+        $monthlyRevenue = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Debug log
+        error_log("Revenue Query Result: " . json_encode($monthlyRevenue));
+        
+        sendResponse(true, 'Monthly revenue retrieved successfully', [
+            'monthly_revenue' => $monthlyRevenue,
+            'year' => $year
+        ], 200);
+        
+    } catch (PDOException $e) {
+        error_log("Get Monthly Revenue Error: " . $e->getMessage());
+        sendResponse(false, 'Error retrieving monthly revenue: ' . $e->getMessage(), null, 500);
     }
 }
 

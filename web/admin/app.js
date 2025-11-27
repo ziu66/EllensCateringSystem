@@ -1446,37 +1446,94 @@ function loadUpcomingEvents(bookings) {
     `;
 }
 
-function createRevenueChart() {
+async function createRevenueChart() {
+    // Wait for DOM to be ready
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     const ctx = document.getElementById('revenueChart');
-    if (ctx && typeof Chart !== 'undefined') {
-        new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'],
-                datasets: [{
-                    label: 'Revenue',
-                    data: [12000, 19000, 15000, 25000, 22000, 30000, 28000, 35000, 32000, 45000],
-                    borderColor: '#000',
-                    backgroundColor: 'rgba(0, 0, 0, 0.1)',
-                    tension: 0.4
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            callback: function(value) {
-                                return '₱' + value.toLocaleString();
+    
+    if (!ctx) {
+        console.error('Revenue chart canvas not found!');
+        return;
+    }
+    
+    if (typeof Chart === 'undefined') {
+        console.error('Chart.js not loaded!');
+        return;
+    }
+    
+    try {
+        // Show loading message
+        ctx.parentElement.innerHTML = '<p class="text-center py-5"><i class="bi bi-hourglass-split"></i> Loading revenue data...</p><canvas id="revenueChart"></canvas>';
+        const newCtx = document.getElementById('revenueChart');
+        
+        // Fetch revenue data from API
+        const response = await fetch(API_BASE + 'bookings/index.php?action=monthly_revenue&year=' + new Date().getFullYear(), {
+            credentials: 'include'
+        });
+        
+        const data = await response.json();
+        
+        console.log('Revenue API Response:', data); // Debug log
+        
+        if (data.success && data.data && data.data.monthly_revenue && data.data.monthly_revenue.length > 0) {
+            const monthlyData = data.data.monthly_revenue;
+            
+            // Create labels and revenues arrays
+            const labels = monthlyData.map(item => item.month);
+            const revenues = monthlyData.map(item => parseFloat(item.revenue) || 0);
+            
+            console.log('Chart Data - Labels:', labels, 'Revenues:', revenues); // Debug
+            
+            new Chart(newCtx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Revenue',
+                        data: revenues,
+                        borderColor: '#000',
+                        backgroundColor: 'rgba(0, 0, 0, 0.1)',
+                        tension: 0.4,
+                        fill: true,
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: { 
+                        legend: { 
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return 'Revenue: ₱' + context.parsed.y.toLocaleString();
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '₱' + value.toLocaleString();
+                                }
                             }
                         }
                     }
                 }
-            }
-        });
+            });
+        } else {
+            console.warn('No revenue data available or empty dataset');
+            newCtx.parentElement.innerHTML = '<div class="alert alert-info text-center py-5"><i class="bi bi-info-circle me-2"></i>No revenue data available for ' + new Date().getFullYear() + '</div>';
+        }
+    } catch (error) {
+        console.error('Error loading revenue chart:', error);
+        ctx.parentElement.innerHTML = '<div class="alert alert-danger text-center py-5"><i class="bi bi-exclamation-triangle me-2"></i>Failed to load revenue chart: ' + error.message + '</div>';
     }
 }
 
@@ -4134,7 +4191,7 @@ function getAuthToken() {
 }
 
 // ===== AGREEMENT MANAGEMENT =====
-function viewAgreement(bookingID) {
+async function viewAgreement(bookingID) {
     // Create modal if doesn't exist
     let modal = document.getElementById('adminAgreementModal');
     if (!modal) {
@@ -4142,73 +4199,112 @@ function viewAgreement(bookingID) {
         modal = document.getElementById('adminAgreementModal');
     }
 
-    // Load agreement data
-    fetch(`../api/agreements/index.php?action=admin_get_agreement&booking_id=${bookingID}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success && data.agreement) {
-                const agreement = data.agreement;
+    // Show loading state
+    document.getElementById('adminAgreementPreview').innerHTML = `
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Loading agreement...</p>
+        </div>
+    `;
+
+    // ✅ TRY MULTIPLE PATHS
+    const possiblePaths = [
+        `../../web/api/agreements/index.php?action=admin_get_agreement&booking_id=${bookingID}`
+    ];
+
+    let successfulPath = null;
+    let lastError = null;
+
+    // Try each path until one works
+    for (const path of possiblePaths) {
+        try {
+            console.log('Trying path:', path);
+            const response = await fetch(path);
+            
+            if (response.ok) {
+                successfulPath = path;
+                console.log('✅ Working path found:', path);
                 
-                // Display agreement preview
-                if (agreement.ContractFile) {
-                    try {
-                        const html = atob(agreement.ContractFile);
-                        document.getElementById('adminAgreementPreview').innerHTML = html;
-                    } catch (e) {
-                        document.getElementById('adminAgreementPreview').innerHTML = '<p class="text-danger">Error loading agreement preview</p>';
-                    }
-                }
-
-                // Show signature if signed
-                if (agreement.Status === 'signed' && agreement.CustomerSignature) {
-                    document.getElementById('adminSignatureSection').innerHTML = `
-                        <div style="margin-top: 20px; border-top: 2px solid #ddd; padding-top: 20px;">
-                            <h6 style="font-weight: 600; margin-bottom: 15px;">
-                                <i class="bi bi-check-circle me-2"></i>Customer Signature
-                            </h6>
-                            <p style="color: #666; font-size: 0.85rem; margin-bottom: 10px;">
-                                <strong>Signed on:</strong> ${new Date(agreement.SignedDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-                            </p>
-                            <div style="border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #f9f9f9; text-align: center;">
-                                <img src="${agreement.CustomerSignature}" alt="Customer Signature" style="max-width: 300px; max-height: 100px; object-fit: contain;">
-                            </div>
-                        </div>
-                    `;
+                const data = await response.json();
+                
+                if (data.success && data.agreement) {
+                    displayAgreementInModal(data.agreement, bookingID);
+                    break;
                 } else {
-                    document.getElementById('adminSignatureSection').innerHTML = `
-                        <div class="alert alert-warning" style="margin-top: 20px;">
-                            <i class="bi bi-clock me-2"></i>
-                            <strong>Not Yet Signed</strong>
-                            <br>
-                            <small>Awaiting customer signature...</small>
-                        </div>
-                    `;
+                    throw new Error(data.message || 'Agreement not found');
                 }
-
-                // Update button visibility
-                if (agreement.Status === 'signed') {
-                    document.getElementById('printAgreementBtn').style.display = 'block';
-                    document.getElementById('downloadAgreementBtn').style.display = 'block';
-                } else {
-                    document.getElementById('printAgreementBtn').style.display = 'none';
-                    document.getElementById('downloadAgreementBtn').style.display = 'none';
-                }
-
-                // Store booking ID for print/download
-                document.getElementById('adminAgreementModal').dataset.bookingId = bookingID;
-
-            } else {
-                document.getElementById('adminAgreementPreview').innerHTML = '<p class="text-warning">Agreement not found or not yet created.</p>';
-                document.getElementById('adminSignatureSection').innerHTML = '';
             }
-        })
-        .catch(error => {
-            console.error('Error loading agreement:', error);
-            document.getElementById('adminAgreementPreview').innerHTML = '<p class="text-danger">Error loading agreement</p>';
-        });
+        } catch (error) {
+            console.log('❌ Path failed:', path, error.message);
+            lastError = error;
+        }
+    }
+
+    if (!successfulPath) {
+        document.getElementById('adminAgreementPreview').innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong>Error loading agreement</strong>
+                <p class="mb-0 mt-2">Could not find the API endpoint. Error: ${lastError?.message}</p>
+                <p class="mb-0 mt-2 small">Tried paths:<br>${possiblePaths.map(p => `- ${p}`).join('<br>')}</p>
+            </div>
+        `;
+    }
 
     const bsModal = new bootstrap.Modal(modal);
     bsModal.show();
+}
+
+// ✅ NEW HELPER FUNCTION
+function displayAgreementInModal(agreement, bookingID) {
+    const content = document.getElementById('adminAgreementPreview');
+    
+    // Display agreement preview
+    if (agreement.ContractFile) {
+        try {
+            const html = atob(agreement.ContractFile);
+            content.innerHTML = html;
+        } catch (e) {
+            console.error('Error decoding agreement:', e);
+            content.innerHTML = '<p class="text-danger">Error loading agreement preview</p>';
+        }
+    } else {
+        content.innerHTML = '<p class="text-warning">Agreement content not available</p>';
+    }
+
+    // Show signature if signed
+    if (agreement.Status === 'signed' && agreement.CustomerSignature) {
+        document.getElementById('adminSignatureSection').innerHTML = `
+            <div style="margin-top: 20px; border-top: 2px solid #ddd; padding-top: 20px;">
+                <h6 style="font-weight: 600; margin-bottom: 15px;">
+                    <i class="bi bi-check-circle-fill text-success me-2"></i>Customer Signature
+                </h6>
+                <p style="color: #666; font-size: 0.85rem; margin-bottom: 10px;">
+                    <strong>Signed on:</strong> ${new Date(agreement.SignedDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                </p>
+                <div style="border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #f9f9f9; text-align: center;">
+                    <img src="${agreement.CustomerSignature}" alt="Customer Signature" style="max-width: 300px; max-height: 100px; object-fit: contain;">
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('printAgreementBtn').style.display = 'inline-block';
+        document.getElementById('downloadAgreementBtn').style.display = 'inline-block';
+    } else {
+        document.getElementById('adminSignatureSection').innerHTML = `
+            <div class="alert alert-warning" style="margin-top: 20px;">
+                <i class="bi bi-clock me-2"></i>
+                <strong>Not Yet Signed</strong>
+                <br><small>Awaiting customer signature...</small>
+            </div>
+        `;
+        document.getElementById('printAgreementBtn').style.display = 'none';
+        document.getElementById('downloadAgreementBtn').style.display = 'none';
+    }
+
+    document.getElementById('adminAgreementModal').dataset.bookingId = bookingID;
 }
 
 function createAdminAgreementModal() {
