@@ -23,10 +23,6 @@ function checkAuth() {
         });
 }
 
-
-
-
-// Logout function
 function logout() {
     fetch(API_BASE + 'auth/logout.php', {
             method: 'POST',
