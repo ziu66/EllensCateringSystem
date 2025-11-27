@@ -154,8 +154,8 @@ function handleConfirmPayment($conn) {
 }
 
 /**
- * GET: Retrieve pending payments for admin
- * Returns bookings with PaymentStatus = 'Processing'
+ * GET: Retrieve pending payments for admin - FIXED VERSION
+ * Now includes payment reference numbers
  */
 function handleGetPendingPayments($conn) {
     try {
@@ -165,6 +165,7 @@ function handleGetPendingPayments($conn) {
         $paymentMethod = $_GET['payment_method'] ?? null;
         
         // Base query for pending payments
+        // ✅ FIXED: Added GCashReference, BankReferenceNumber, BankSenderName
         $query = "SELECT 
                     b.BookingID,
                     b.ClientID,
@@ -179,6 +180,9 @@ function handleGetPendingPayments($conn) {
                     b.TotalAmount,
                     b.PaymentMethod,
                     b.PaymentStatus,
+                    b.GCashReference,
+                    b.BankReferenceNumber,
+                    b.BankSenderName,
                     b.CreatedAt,
                     q.QuotationID,
                     q.Status as QuotationStatus
@@ -395,8 +399,8 @@ function handleCancelBooking($conn) {
 }
 
 /**
- * GET: Retrieve bookings
- * Supports filtering by status, date range, and search
+ * GET: Retrieve bookings - FIXED VERSION
+ * Now includes payment reference numbers
  */
 function handleGetBookings($conn) {
     try {
@@ -410,6 +414,7 @@ function handleGetBookings($conn) {
         $offset = $_GET['offset'] ?? 0;
         
         // Base query with JOIN to get client info
+        // ✅ FIXED: Added GCashReference, BankReferenceNumber, BankSenderName
         $query = "SELECT 
                     b.BookingID,
                     b.ClientID,
@@ -427,6 +432,9 @@ function handleGetBookings($conn) {
                     b.PaymentStatus,
                     b.PaymentMethod,
                     b.PaymentDate,
+                    b.GCashReference,
+                    b.BankReferenceNumber,
+                    b.BankSenderName,
                     b.CreatedAt,
                     b.UpdatedAt
                   FROM booking b

@@ -1038,114 +1038,115 @@ const pages = {
         </div>
     `,
 
-    payments: `
-        <div class="row mb-4">
-            <div class="col-md-6 mb-3">
-                <div class="card stat-card">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <p class="text-muted mb-1">Pending Payments</p>
-                                <h3 class="mb-0" id="pendingPaymentCount">0</h3>
-                                <small class="text-warning"><i class="bi bi-clock-history me-1"></i>Awaiting confirmation</small>
-                            </div>
-                            <div class="stat-icon">
-                                <i class="bi bi-hourglass-split fs-4" style="color: #ffc107;"></i>
-                            </div>
+    // Update the payments page template - REPLACE THE payments section
+payments: `
+    <div class="row mb-4">
+        <div class="col-md-6 mb-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-muted mb-1">Pending Payments</p>
+                            <h3 class="mb-0" id="pendingPaymentCount">0</h3>
+                            <small class="text-warning"><i class="bi bi-clock-history me-1"></i>Awaiting confirmation</small>
                         </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6 mb-3">
-                <div class="card stat-card">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <p class="text-muted mb-1">Confirmed Payments</p>
-                                <h3 class="mb-0" id="confirmedPaymentCount">0</h3>
-                                <small class="text-success"><i class="bi bi-check-circle me-1"></i>Successfully received</small>
-                            </div>
-                            <div class="stat-icon">
-                                <i class="bi bi-check-circle-fill fs-4" style="color: #28a745;"></i>
-                            </div>
+                        <div class="stat-icon">
+                            <i class="bi bi-hourglass-split fs-4" style="color: #ffc107;"></i>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
+        <div class="col-md-6 mb-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-muted mb-1">Confirmed Payments</p>
+                            <h3 class="mb-0" id="confirmedPaymentCount">0</h3>
+                            <small class="text-success"><i class="bi bi-check-circle me-1"></i>Successfully received</small>
+                        </div>
+                        <div class="stat-icon">
+                        <i class="bi bi-check-circle-fill fs-4" style="color: #28a745;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-        <div class="card mb-4">
-            <div class="card-header bg-gradient" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
-                <div class="d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Pending Payments</h5>
-                    <small>Processing</small>
-                </div>
-            </div>
-            <div class="card-body">
-                <div class="row mb-3 g-2">
-                    <div class="col-md-6">
-                        <div class="input-group">
-                            <span class="input-group-text bg-light border-0"><i class="bi bi-search"></i></span>
-                            <input type="text" class="form-control border-0" placeholder="Search by ID or client name..." id="searchPayments" onkeyup="filterPayments()">
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <select class="form-select border-0" id="filterPaymentMethod" onchange="filterPayments()">
-                            <option value="">All Payment Methods</option>
-                            <option value="Cash">💵 Cash</option>
-                            <option value="GCash">📱 GCash</option>
-                            <option value="Bank Transfer">🏦 Bank Transfer</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle">
-                        <caption class="table-title text-muted">Pending Payments</caption>
-                        <thead class="table-light">
-                            <tr>
-                                <th>Booking ID</th>
-                                <th>Client</th>
-                                <th>Event Date</th>
-                                <th>Amount</th>
-                                <th>Payment</th>
-                                <th>Selected</th>
-                                <th class="text-center">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="pendingPaymentsTable">
-                            <tr><td colspan="7" class="text-center text-muted py-4"><i class="bi bi-inbox me-2"></i>Loading payments...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
+    <div class="card mb-4">
+        <div class="card-header bg-gradient" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Pending Payments</h5>
+                <small>Processing</small>
             </div>
         </div>
-        
-        <div class="card">
-            <div class="card-header bg-gradient" style="background: linear-gradient(135deg, #56ab2f 0%, #a8e063 100%); color: white;">
-                <h5 class="mb-0"><i class="bi bi-check-circle me-2"></i>Confirmed Payments (Paid)</h5>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle">
-                        <caption class="table-title text-muted">Confirmed Payments</caption>
-                        <thead class="table-light">
-                            <tr>
-                                <th>Booking ID</th>
-                                <th>Client</th>
-                                <th>Amount</th>
-                                <th>Payment Method</th>
-                                <th>Paid On</th>
-                            </tr>
-                        </thead>
-                        <tbody id="confirmedPaymentsTable">
-                            <tr><td colspan="5" class="text-center text-muted py-4"><i class="bi bi-inbox me-2"></i>No confirmed payments yet</td></tr>
-                        </tbody>
-                    </table>
+        <div class="card-body">
+            <div class="row mb-3 g-2">
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <span class="input-group-text bg-light border-0"><i class="bi bi-search"></i></span>
+                        <input type="text" class="form-control border-0" placeholder="Search by ID or client name..." id="searchPayments" onkeyup="filterPayments()">
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <select class="form-select border-0" id="filterPaymentMethod" onchange="filterPayments()">
+                        <option value="">All Payment Methods</option>
+                        <option value="Cash">💵 Cash</option>
+                        <option value="GCash">📱 GCash</option>
+                        <option value="Bank Transfer">🏦 Bank Transfer</option>
+                    </select>
                 </div>
             </div>
+            
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <caption class="table-title text-muted">Pending Payments</caption>
+                    <thead class="table-light">
+                        <tr>
+                            <th>Booking ID</th>
+                            <th>Client</th>
+                            <th>Event Date</th>
+                            <th>Amount</th>
+                            <th>Payment Method</th>
+                            <th><i class="bi bi-receipt me-1"></i>Reference</th>
+                            <th class="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pendingPaymentsTable">
+                        <tr><td colspan="7" class="text-center text-muted py-4"><i class="bi bi-inbox me-2"></i>Loading payments...</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
-    `,
+    </div>
+     <div class="card">
+        <div class="card-header bg-gradient" style="background: linear-gradient(135deg, #56ab2f 0%, #a8e063 100%); color: white;">
+            <h5 class="mb-0"><i class="bi bi-check-circle me-2"></i>Confirmed Payments (Paid)</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <caption class="table-title text-muted">Confirmed Payments</caption>
+                    <thead class="table-light">
+                        <tr>
+                            <th>Booking ID</th>
+                            <th>Client</th>
+                            <th>Amount</th>
+                            <th>Payment Method</th>
+                            <th><i class="bi bi-receipt me-1"></i>Reference</th>
+                            <th>Paid On</th>
+                        </tr>
+                    </thead>
+                    <tbody id="confirmedPaymentsTable">
+                        <tr><td colspan="6" class="text-center text-muted py-4"><i class="bi bi-inbox me-2"></i>No confirmed payments yet</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+`,
 
     sales: `
         <div class="row mb-4">
@@ -2180,6 +2181,13 @@ async function loadPaymentsData() {
     }
 }
 
+// ============================================================
+// COMPLETE FIXED PAYMENT DISPLAY FUNCTIONS
+// ============================================================
+
+/**
+ * Display pending payments with correct reference mapping
+ */
 function displayPendingPayments(payments) {
     const tbody = document.getElementById('pendingPaymentsTable');
     
@@ -2190,47 +2198,295 @@ function displayPendingPayments(payments) {
 
     tbody.innerHTML = payments.map(payment => {
         const eventDate = new Date(payment.EventDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-        const selectedDate = new Date(payment.CreatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         
         let methodBadgeStyle = 'background-color: #0d6efd; color: white;';
         let methodIcon = '';
-        if (payment.PaymentMethod === 'GCash') {
+        const paymentMethod = payment.PaymentMethod || 'Pending Payment';
+        
+        if (paymentMethod === 'GCash') {
             methodIcon = '<i class="bi bi-phone-fill me-1"></i>';
             methodBadgeStyle = 'background-color: #0d6efd; color: white;';
-        } else if (payment.PaymentMethod === 'Cash') {
+        } else if (paymentMethod === 'Cash') {
             methodIcon = '<i class="bi bi-cash-stack me-1"></i>';
             methodBadgeStyle = 'background-color: #198754; color: white;';
-        } else if (payment.PaymentMethod === 'Bank Transfer') {
+        } else if (paymentMethod === 'Bank Transfer') {
             methodIcon = '<i class="bi bi-bank me-1"></i>';
             methodBadgeStyle = 'background-color: #6f42c1; color: white;';
         }
         
+        // Get reference number - FIXED
+        let referenceNumber = '';
+        let senderName = '';
+        
+        if (paymentMethod === 'GCash' && payment.GCashReference) {
+            referenceNumber = payment.GCashReference;
+        } else if (paymentMethod === 'Bank Transfer') {
+            referenceNumber = payment.BankReferenceNumber || '';
+            senderName = payment.BankSenderName || '';
+        }
+        
+        const hasReference = !!referenceNumber;
+        const actualBookingId = payment.BookingID;
+        const refEscaped = referenceNumber.replace(/'/g, "\\'");
+        const senderEscaped = senderName.replace(/'/g, "\\'");
+        
         return `
         <tr class="align-middle">
-            <td><span class="badge bg-light text-dark"><strong>#${payment.BookingID}</strong></span></td>
+            <td><span class="badge bg-light text-dark"><strong>#${actualBookingId}</strong></span></td>
             <td>
-                <div class="fw-semibold">${payment.ClientName}</div>
-                <small class="text-muted">${payment.ClientEmail}</small>
+                <div class="fw-semibold">${payment.ClientName || 'N/A'}</div>
+                <small class="text-muted">${payment.ClientEmail || 'N/A'}</small>
             </td>
             <td>${eventDate}</td>
-            <td><span class="fw-bold text-success">₱${parseFloat(payment.TotalAmount).toLocaleString('en-PH', {minimumFractionDigits: 2})}</span></td>
-            <td><span class="payment-badge" style="${methodBadgeStyle}">${methodIcon}${payment.PaymentMethod}</span></td>
-            <td><span class="text-muted">${selectedDate}</span></td>
+            <td><span class="fw-bold text-success">₱${parseFloat(payment.TotalAmount || 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}</span></td>
+            <td><span class="payment-badge" style="${methodBadgeStyle}">${methodIcon}${paymentMethod}</span></td>
+            <td>
+                ${hasReference ? `
+                    <div class="d-flex align-items-center gap-2">
+                        <code style="background: #f5f5f5; padding: 6px 10px; border-radius: 4px; flex: 1; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85rem;" title="${refEscaped}">
+                            ${refEscaped}
+                        </code>
+                        <button class="btn btn-sm btn-outline-primary" onclick="viewPaymentReference(${actualBookingId}, '${paymentMethod}', '${refEscaped}', '${senderEscaped}')" title="View Details">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                    </div>
+                ` : `
+                    <span class="text-muted small"><em>No reference provided</em></span>
+                `}
+            </td>
             <td class="text-center">
-                <button class="btn btn-sm btn-success rounded-pill px-3" onclick="confirmPayment(${payment.BookingID})" title="Confirm Payment">
-                    <i class="bi bi-check2-circle me-1"></i><span class="d-none d-md-inline">Confirm</span>
-                </button>
+                ${hasReference ? `
+                    <button class="btn btn-sm btn-success rounded-pill px-3" onclick="confirmPayment(${actualBookingId})" title="Confirm Payment">
+                        <i class="bi bi-check2-circle me-1"></i><span class="d-none d-md-inline">Confirm</span>
+                    </button>
+                ` : `
+                    <span class="text-warning small"><em>Waiting for reference</em></span>
+                `}
             </td>
         </tr>
         `;
     }).join('');
 }
 
+async function confirmPayment(bookingId) {
+    if (!confirm('Confirm this payment?\n\nThis will mark the payment as completed.')) return;
+    
+    try {
+        const response = await fetch('./web/api/bookings/index.php?action=confirm_payment', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'include',
+            body: JSON.stringify({ booking_id: bookingId })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showPaymentToast('Payment confirmed successfully!', 'success');
+            setTimeout(() => {
+                loadPaymentsData();
+            }, 1000);
+        } else {
+            showPaymentToast(data.message || 'Failed to confirm payment', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showPaymentToast('An error occurred', 'error');
+    }
+}
+
+function viewPaymentReference(bookingId, method, referenceNumber, senderName) {
+    const modalHTML = `
+        <div class="modal fade" id="viewReferenceModal" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-dark text-white">
+                        <h5 class="modal-title">
+                            <i class="bi bi-receipt me-2"></i>Payment Reference Verification
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>Booking ID:</strong> #${bookingId}
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-credit-card me-1"></i>Payment Method
+                            </label>
+                            <div class="p-3 bg-light rounded">
+                                ${method === 'GCash' ? '<i class="bi bi-phone-fill text-primary me-2"></i>' : method === 'Bank Transfer' ? '<i class="bi bi-bank text-info me-2"></i>' : '<i class="bi bi-cash-stack text-success me-2"></i>'}
+                                <strong>${method}</strong>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-hash me-1"></i>Reference Number
+                            </label>
+                            <div class="p-3 bg-light rounded d-flex justify-content-between align-items-center">
+                                <code style="font-size: 1rem; color: #000; word-break: break-all; flex: 1;">${referenceNumber}</code>
+                                <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyToClipboard('${referenceNumber}')">
+                                    <i class="bi bi-clipboard"></i> Copy
+                                </button>
+                            </div>
+                        </div>
+                        
+                        ${senderName ? `
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="bi bi-person me-1"></i>Sender/Cardholder Name
+                                </label>
+                                <div class="p-3 bg-light rounded">
+                                    <strong>${senderName}</strong>
+                                </div>
+                            </div>
+                        ` : ''}
+                        
+                        <div class="alert alert-warning mb-0">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            <strong>Verification Steps:</strong>
+                            <ol class="mb-0 mt-2 ps-3">
+                                <li>Verify the reference number in your ${method} records</li>
+                                <li>Confirm the sender/cardholder matches client records</li>
+                                <li>Check the amount matches the booking total</li>
+                                <li>Click "Confirm Payment" if everything matches</li>
+                            </ol>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="button" class="btn btn-success" onclick="confirmPayment(${bookingId}); bootstrap.Modal.getInstance(document.getElementById('viewReferenceModal')).hide();">
+                            <i class="bi bi-check-circle me-1"></i>Verify & Confirm Payment
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remove existing modal if any
+    const existingModal = document.getElementById('viewReferenceModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Add modal to body
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('viewReferenceModal'));
+    modal.show();
+    
+    // Remove modal from DOM when hidden
+    document.getElementById('viewReferenceModal').addEventListener('hidden.bs.modal', function() {
+        this.remove();
+    });
+}
+/**
+ * View payment reference details in modal
+ */
+function viewPaymentReference(bookingId, method, referenceNumber, senderName) {
+    console.log('viewPaymentReference called with:', { bookingId, method, referenceNumber, senderName }); // Debug
+    
+    const modalHTML = `
+        <div class="modal fade" id="viewReferenceModal" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-dark text-white">
+                        <h5 class="modal-title">
+                            <i class="bi bi-receipt me-2"></i>Payment Reference Details
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>Booking ID:</strong> #${bookingId}
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-credit-card me-1"></i>Payment Method
+                            </label>
+                            <div class="p-3 bg-light rounded">
+                                ${method === 'GCash' ? '<i class="bi bi-phone-fill text-primary me-2"></i>' : method === 'Bank Transfer' ? '<i class="bi bi-bank text-info me-2"></i>' : '<i class="bi bi-cash-stack text-success me-2"></i>'}
+                                <strong>${method}</strong>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-hash me-1"></i>Reference Number
+                            </label>
+                            <div class="p-3 bg-light rounded d-flex justify-content-between align-items-center">
+                                <code style="font-size: 1.1rem; color: #000; word-break: break-all;">${referenceNumber}</code>
+                                <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyToClipboard('${referenceNumber.replace(/'/g, "\\'")}')">
+                                    <i class="bi bi-clipboard"></i> Copy
+                                </button>
+                            </div>
+                        </div>
+                        
+                        ${senderName ? `
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="bi bi-person me-1"></i>Sender Name
+                                </label>
+                                <div class="p-3 bg-light rounded">
+                                    ${senderName}
+                                </div>
+                            </div>
+                        ` : ''}
+                        
+                        <div class="alert alert-warning mb-0">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            <strong>Verification Required</strong><br>
+                            <small>Please verify this reference number in your ${method} account before confirming the payment.</small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="button" class="btn btn-success" onclick="confirmPaymentFromReference(${bookingId})">
+                            <i class="bi bi-check-circle me-1"></i>Verify & Confirm Payment
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remove existing modal if any
+    const existingModal = document.getElementById('viewReferenceModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Add modal to body
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('viewReferenceModal'));
+    modal.show();
+    
+    // Remove modal from DOM when hidden
+    document.getElementById('viewReferenceModal').addEventListener('hidden.bs.modal', function() {
+        this.remove();
+    });
+}
+
+/**
+ * Display confirmed (paid) payments
+ */
 function displayConfirmedPayments(payments) {
     const tbody = document.getElementById('confirmedPaymentsTable');
     
     if (!payments || payments.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4"><i class="bi bi-inbox me-2"></i>No confirmed payments yet</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4"><i class="bi bi-inbox me-2"></i>No confirmed payments yet</td></tr>';
         return;
     }
 
@@ -2239,15 +2495,28 @@ function displayConfirmedPayments(payments) {
         
         let methodBadgeStyle = 'background-color: #0d6efd; color: white;';
         let methodIcon = '';
-        if (payment.PaymentMethod === 'GCash') {
+        const paymentMethod = payment.PaymentMethod || 'N/A';
+        
+        if (paymentMethod === 'GCash') {
             methodIcon = '<i class="bi bi-phone-fill me-1"></i>';
             methodBadgeStyle = 'background-color: #0d6efd; color: white;';
-        } else if (payment.PaymentMethod === 'Cash') {
+        } else if (paymentMethod === 'Cash') {
             methodIcon = '<i class="bi bi-cash-stack me-1"></i>';
             methodBadgeStyle = 'background-color: #198754; color: white;';
-        } else if (payment.PaymentMethod === 'Bank Transfer') {
+        } else if (paymentMethod === 'Bank Transfer') {
             methodIcon = '<i class="bi bi-bank me-1"></i>';
             methodBadgeStyle = 'background-color: #6f42c1; color: white;';
+        }
+        
+        // ✅ FIXED: Get the correct reference number based on payment method
+        let referenceNumber = 'N/A';
+        
+        if (paymentMethod === 'GCash') {
+            referenceNumber = payment.GCashReference || 'N/A';
+        } else if (paymentMethod === 'Bank Transfer') {
+            referenceNumber = payment.BankReferenceNumber || 'N/A';
+        } else if (paymentMethod === 'Cash') {
+            referenceNumber = 'Cash Payment';
         }
         
         return `
@@ -2255,62 +2524,76 @@ function displayConfirmedPayments(payments) {
             <td><span class="badge bg-light text-dark"><strong>#${payment.BookingID}</strong></span></td>
             <td class="fw-semibold">${payment.ClientName}</td>
             <td><span class="fw-bold text-success">₱${parseFloat(payment.TotalAmount).toLocaleString('en-PH', {minimumFractionDigits: 2})}</span></td>
-            <td><span class="payment-badge" style="${methodBadgeStyle}">${methodIcon}${payment.PaymentMethod}</span></td>
+            <td><span class="payment-badge" style="${methodBadgeStyle}">${methodIcon}${paymentMethod}</span></td>
+            <td>
+                <code style="background: #f5f5f5; padding: 6px 10px; border-radius: 4px; display: inline-block; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${referenceNumber}">
+                    ${referenceNumber}
+                </code>
+            </td>
             <td><span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>${paidDate}</span></td>
         </tr>
         `;
     }).join('');
 }
 
-function filterPayments() {
-    const searchInput = document.getElementById('searchPayments').value.toLowerCase();
-    const methodFilter = document.getElementById('filterPaymentMethod').value;
-    const table = document.getElementById('pendingPaymentsTable');
-    const rows = table.getElementsByTagName('tr');
-    
-    Array.from(rows).forEach(row => {
-        const bookingId = row.cells[0]?.textContent.toLowerCase() || '';
-        const clientName = row.cells[1]?.textContent.toLowerCase() || '';
-        const method = row.cells[4]?.textContent.toLowerCase() || '';
-        
-        const matchesSearch = bookingId.includes(searchInput) || clientName.includes(searchInput);
-        const matchesMethod = !methodFilter || method.includes(methodFilter.toLowerCase());
-        
-        row.style.display = (matchesSearch && matchesMethod) ? '' : 'none';
+/**
+ * Copy text to clipboard
+ */
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        showPaymentToast('Reference number copied to clipboard!', 'success');
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+        showPaymentToast('Failed to copy to clipboard', 'error');
     });
 }
 
-function confirmPayment(bookingId) {
-    if (!confirm(`Confirm payment for Booking #${bookingId}?`)) {
-        return;
-    }
-    
-    const data = {
-        booking_id: bookingId
-    };
-    
-    fetch(API_BASE + 'bookings/index.php?action=confirm_payment', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(data)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert('✓ Payment confirmed successfully!');
-            loadPaymentsData(); // Refresh the pending payments list
-            document.getElementById('pageContent').innerHTML = pages['payments'];
-            loadPaymentsData();
-        } else {
-            alert('Error: ' + (data.message || 'Failed to confirm payment'));
+/**
+ * Confirm payment from reference modal
+ */
+function confirmPaymentFromReference(bookingId) {
+    if (confirm('Have you verified this payment reference?\n\nClick OK to confirm the payment.')) {
+        confirmPayment(bookingId);
+        
+        // Close the reference modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('viewReferenceModal'));
+        if (modal) {
+            modal.hide();
         }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('Error confirming payment');
+    }
+}
+
+/**
+ * Show toast notification
+ */
+function showPaymentToast(message, type = 'info') {
+    const bgClass = type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info';
+    const iconClass = type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle';
+    
+    const toastHTML = `
+        <div class="position-fixed top-0 end-0 p-3" style="z-index: 9999">
+            <div class="toast align-items-center text-white bg-${bgClass} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="d-flex">
+                    <div class="toast-body">
+                        <i class="bi bi-${iconClass} me-2"></i>
+                        ${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = toastHTML;
+    document.body.appendChild(tempDiv);
+    
+    const toastElement = tempDiv.querySelector('.toast');
+    const toast = new bootstrap.Toast(toastElement, { delay: 3000 });
+    toast.show();
+    
+    toastElement.addEventListener('hidden.bs.toast', () => {
+        tempDiv.remove();
     });
 }
 

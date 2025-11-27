@@ -86,10 +86,16 @@ $message = isset($_SESSION['booking_message']) ? $_SESSION['booking_message'] : 
 $messageType = isset($_SESSION['booking_message_type']) ? $_SESSION['booking_message_type'] : '';
 unset($_SESSION['booking_message'], $_SESSION['booking_message_type']);
 
-// Fetch all bookings for the client WITH QUOTATION DATA
+// Replace the bookingsQuery section with:
 $bookingsQuery = "
     SELECT 
         b.*,
+        b.GCashReference,
+        b.BankReferenceNumber,
+        b.BankSenderName,
+        b.PaymentMethod,
+        b.PaymentStatus,
+        b.PaymentDate,
         p.PackageName,
         p.PackPrice,
         q.QuotationID,
@@ -110,7 +116,6 @@ $bookingsQuery = "
     GROUP BY b.BookingID
     ORDER BY b.DateBooked DESC
 ";
-
 $stmt = $conn->prepare($bookingsQuery);
 $stmt->bind_param("i", $client_id);
 $stmt->execute();
@@ -742,6 +747,25 @@ $stmt->close();
                                         <span class="detail-value"><?= date('F d, Y @ g:i A', strtotime($booking['PaymentDate'])) ?></span>
                                     </div>
                                 <?php endif; ?>
+                                    <!-- ADD YOUR BANK REFERENCE FIELDS HERE -->
+                                    <?php if ($booking['BankReferenceNumber']): ?>
+                                        <div class="detail-row" style="margin-top: 8px;">
+                                            <span class="detail-label">
+                                                <i class="bi bi-hash me-1"></i>Bank Reference:
+                                            </span>
+                                            <span class="detail-value" style="font-family: monospace;"><?= htmlspecialchars($booking['BankReferenceNumber']) ?></span>
+                                        </div>
+                                    <?php endif; ?>
+                                    
+                                    <?php if ($booking['BankSenderName']): ?>
+                                        <div class="detail-row" style="margin-top: 8px;">
+                                            <span class="detail-label">
+                                                <i class="bi bi-person me-1"></i>Sender Name:
+                                            </span>
+                                            <span class="detail-value"><?= htmlspecialchars($booking['BankSenderName']) ?></span>
+                                        </div>
+                                    <?php endif; ?>
+
                             </div>
                         <?php endif; ?>
                     </div>
@@ -1106,13 +1130,16 @@ function submitCashPayment(bookingId, method) {
     submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Processing...';
     submitBtn.disabled = true;
     
-    fetch('/web/api/bookings/index.php?action=save_payment_method', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData)
-    })
+// For submitCashPayment function
+fetch('./web/api/bookings/index.php?action=save_payment_method', {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+    },
+    credentials: 'include',
+    body: JSON.stringify(formData)
+})
     .then(response => response.json())
     .then(data => {
         closeCashModal();
@@ -1213,13 +1240,15 @@ function submitGCashPayment(bookingId, method, amount) {
     submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Processing...';
     submitBtn.disabled = true;
     
-    fetch('/web/api/bookings/index.php?action=save_payment_method', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData)
-    })
+fetch('./web/api/bookings/index.php?action=save_payment_method', {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+    },
+    credentials: 'include',
+    body: JSON.stringify(formData)
+})
     .then(response => response.json())
     .then(data => {
         closeGCashConfirmationModal();
@@ -1345,21 +1374,26 @@ function submitBankTransfer(bookingId, method) {
     submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Processing...';
     submitBtn.disabled = true;
     
-    fetch('/web/api/bookings/index.php?action=save_payment_method', {
+    fetch('./web/api/bookings/index.php?action=save_payment_method', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
         },
+        credentials: 'include',
         body: JSON.stringify(formData)
     })
     .then(response => response.json())
     .then(data => {
         closeBankModal();
+        
         if (data.success) {
-            alert(data.message + '\n\nCardholder: ' + cardholderName + '\nCard ending in: ' + cardNumber.slice(-4));
-            location.reload();
+            // Show bank reference modal instead of just reloading
+            showBankReferenceModal(bookingId, cardNumber, cardholderName);
         } else {
             alert(data.message || 'Failed to update payment method');
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
         }
     })
     .catch(error => {
@@ -1367,6 +1401,144 @@ function submitBankTransfer(bookingId, method) {
         alert('An error occurred. Please try again.');
         submitBtn.innerHTML = originalText;
         submitBtn.disabled = false;
+    });
+}
+
+// NEW FUNCTION: Show Bank Reference Modal (similar to GCash)
+function showBankReferenceModal(bookingId, cardNumber, senderName) {
+    const modal = document.getElementById('bankReferenceModal');
+    if (!modal) {
+        // Create modal if it doesn't exist
+        const modalHTML = `
+            <div id="bankReferenceModal" class="gcash-modal" style="display: none;">
+                <div class="gcash-modal-content">
+                    <span class="close-modal" onclick="closeBankReferenceModal()">&times;</span>
+                    <div class="gcash-logo" style="color: #6f42c1;">
+                        <i class="bi bi-bank"></i>
+                    </div>
+                    <h2 style="color: var(--primary-dark); font-weight: 700; margin-bottom: 8px; font-size: 1.5rem;">Bank Transfer Details</h2>
+                    <p style="color: var(--medium-gray); margin-bottom: 15px; font-size: 0.95rem;">Please enter your bank transfer reference number</p>
+                    
+                    <div style="background: #f0f8ff; padding: 12px; border-radius: 10px; margin: 15px 0; font-size: 0.9rem;">
+                        <p style="margin: 0; color: var(--text-dark); font-weight: 600;">
+                            <i class="bi bi-info-circle me-2"></i>Transfer Method: Bank Transfer
+                        </p>
+                        <p style="margin: 5px 0 0 0; color: var(--text-dark); font-weight: 600;">
+                            <i class="bi bi-receipt me-2"></i>Booking ID: #<span id="bankBookingId"></span>
+                        </p>
+                        <p style="margin: 8px 0 0 0; color: var(--text-dark); font-weight: 600;">
+                            <i class="bi bi-person me-2"></i>Sender: <span id="bankSenderName"></span>
+                        </p>
+                        <p style="margin: 8px 0 0 0; color: var(--text-dark); font-weight: 600;">
+                            <i class="bi bi-credit-card me-2"></i>Card: **** **** **** <span id="bankCardLast4"></span>
+                        </p>
+                    </div>
+                    
+                    <div style="margin: 15px 0;">
+                        <label style="display: block; margin-bottom: 8px; color: var(--text-dark); font-weight: 600; font-size: 0.95rem;">
+                            <i class="bi bi-key me-1"></i>Bank Reference Number <span style="color: red;">*</span>
+                        </label>
+                        <input type="text" id="bankRefNumber" placeholder="Enter your bank reference number" 
+                               style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem;" maxlength="50">
+                        <small style="color: #666; display: block; margin-top: 5px;">
+                            <i class="bi bi-info-circle me-1"></i>You can find this in your bank app or transaction receipt
+                        </small>
+                    </div>
+                    
+                    <p style="color: var(--medium-gray); font-size: 0.85rem; margin-bottom: 15px;">
+                        <i class="bi bi-shield-check me-1"></i>
+                        Keep your reference number for verification.
+                    </p>
+                    
+                    <button onclick="completeBankTransfer()" type="button" style="background: var(--primary-dark); color: white; border: none; padding: 10px 25px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.95rem; width: 100%;">
+                        <i class="bi bi-check-circle me-2"></i>I've Completed Transfer
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+    }
+    
+    // Populate modal data
+    document.getElementById('bankBookingId').textContent = bookingId;
+    document.getElementById('bankSenderName').textContent = senderName;
+    document.getElementById('bankCardLast4').textContent = cardNumber.slice(-4);
+    document.getElementById('bankRefNumber').value = '';
+    
+    // Store data for submission
+    window.currentBankTransfer = {
+        bookingId: bookingId,
+        cardNumber: cardNumber,
+        senderName: senderName
+    };
+    
+    // Show modal
+    const bankModal = document.getElementById('bankReferenceModal');
+    bankModal.style.display = 'block';
+    document.body.style.overflow = 'hidden';
+}
+
+// Close Bank Reference Modal
+function closeBankReferenceModal() {
+    const modal = document.getElementById('bankReferenceModal');
+    if (modal) {
+        modal.style.display = 'none';
+        document.body.style.overflow = 'auto';
+        location.reload();
+    }
+}
+
+// Complete Bank Transfer with Reference
+function completeBankTransfer() {
+    const refNumber = document.getElementById('bankRefNumber').value.trim();
+    
+    if (!refNumber) {
+        alert('Please enter your bank reference number to proceed.');
+        return;
+    }
+    
+    if (refNumber.length < 5) {
+        alert('Please enter a valid reference number (at least 5 characters).');
+        return;
+    }
+    
+    if (!window.currentBankTransfer) {
+        alert('Error: Transfer data not found. Please try again.');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('action', 'save_bank_reference');
+    formData.append('booking_id', window.currentBankTransfer.bookingId);
+    formData.append('bank_reference', refNumber);
+    formData.append('sender_name', window.currentBankTransfer.senderName);
+    formData.append('payment_method', 'Bank Transfer');
+    
+    const btn = event.target;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Saving...';
+    btn.disabled = true;
+    
+    fetch('process_bank_reference.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✓ Bank transfer recorded!\n\nYour reference number has been saved. We will verify your payment shortly.');
+            closeBankReferenceModal();
+        } else {
+            alert(data.message || 'Failed to save reference number');
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred. Please try again or contact support.');
+        btn.innerHTML = originalText;
+        btn.disabled = false;
     });
 }
 
@@ -1413,7 +1585,7 @@ function closeGCashModal() {
     }
 }
 
-// Complete GCash payment with reference number
+// Update the completeGCashPayment function
 function completeGCashPayment() {
     const refNumber = document.getElementById('gcashRefNumber').value.trim();
     const bookingIdSpan = document.getElementById('gcashBookingId');
@@ -1424,22 +1596,24 @@ function completeGCashPayment() {
         return;
     }
     
-    const formData = {
-        booking_id: bookingId,
-        gcash_reference: refNumber
-    };
+    if (!bookingId) {
+        alert('Error: Booking ID not found. Please refresh and try again.');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('action', 'save_gcash_reference');
+    formData.append('booking_id', bookingId);
+    formData.append('gcash_reference', refNumber);
     
     const btn = event.target;
     const originalText = btn.innerHTML;
     btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Saving...';
     btn.disabled = true;
     
-    fetch('/web/api/bookings/index.php?action=save_gcash_reference', {
+    fetch('process_gcash_reference.php', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData)
+        body: formData
     })
     .then(response => response.json())
     .then(data => {
@@ -1454,7 +1628,7 @@ function completeGCashPayment() {
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('An error occurred. Please try again.');
+        alert('An error occurred. Please try again or contact support.');
         btn.innerHTML = originalText;
         btn.disabled = false;
     });
