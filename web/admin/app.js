@@ -1014,14 +1014,14 @@ const pages = {
             </div>
             <div class="card-body">
                 <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
                             <tr>
-                                <th>Service Name</th>
-                                <th>Description</th>
-                                <th>Price</th>
-                                <th>Status</th>
-                                <th>Actions</th>
+                                <th style="width: 25%;">SERVICE NAME</th>
+                                <th style="width: 35%;">DESCRIPTION</th>
+                                <th style="width: 15%;">PRICE</th>
+                                <th style="width: 10%;">STATUS</th>
+                                <th style="width: 15%;">ACTIONS</th>
                             </tr>
                         </thead>
                         <tbody id="servicesTable">
@@ -1220,25 +1220,25 @@ payments: `
                         <div class="row">
                             <div class="col-md-3 mb-3">
                                 <label class="form-label">Report Type</label>
-                                <select class="form-select">
-                                    <option>Sales Report</option>
-                                    <option>Bookings Report</option>
-                                    <option>Client Report</option>
-                                    <option>Revenue Report</option>
+                                <select id="reportType" class="form-select">
+                                    <option value="sales">Sales Report</option>
+                                    <option value="bookings">Bookings Report</option>
+                                    <option value="client">Client Report</option>
+                                    <option value="revenue">Revenue Report</option>
                                 </select>
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label class="form-label">Start Date</label>
-                                <input type="date" class="form-control">
+                                <input type="date" id="filterStartDate" class="form-control">
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label class="form-label">End Date</label>
-                                <input type="date" class="form-control">
+                                <input type="date" id="filterEndDate" class="form-control">
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label class="form-label">&nbsp;</label>
-                                <button class="btn btn-dark w-100">
-                                    <i class="bi bi-file-earmark-arrow-down me-2"></i>Generate
+                                <button class="btn btn-dark w-100" onclick="applyReportFilters()">
+                                    <i class="bi bi-funnel me-2"></i>Apply Filters
                                 </button>
                             </div>
                         </div>
@@ -1954,34 +1954,44 @@ function displayServices(services) {
     const tbody = document.getElementById('servicesTable');
     
     if (!services || services.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No services found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">No services found</td></tr>';
         return;
     }
 
     tbody.innerHTML = services.map(service => `
         <tr>
             <td>
-                <i class="${service.IconClass} me-2"></i>
-                <strong>${service.ServiceName}</strong>
-                ${service.IsPopular == 1 ? '<span class="badge bg-warning text-dark ms-2">Popular</span>' : ''}
-            </td>
-            <td>${service.Description || 'N/A'}</td>
-            <td>₱${parseFloat(service.PricePerPerson).toLocaleString()}/person</td>
-            <td>
-                ${service.IsActive == 1 
-                    ? '<span class="badge bg-success">Active</span>' 
-                    : '<span class="badge bg-secondary">Inactive</span>'}
+                <div class="d-flex align-items-center gap-2">
+                    <i class="${service.IconClass} fs-5" style="color: #000;"></i>
+                    <div>
+                        <strong>${service.ServiceName}</strong>
+                        ${service.IsPopular == 1 ? '<br><span class="badge bg-warning text-dark" style="font-size: 0.75rem;">Popular</span>' : ''}
+                    </div>
+                </div>
             </td>
             <td>
-                <button class="btn btn-sm btn-outline-dark" onclick="viewService(${service.ServiceID})" title="View Details">
-                    <i class="bi bi-eye"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-dark" onclick="editService(${service.ServiceID})" title="Edit">
-                    <i class="bi bi-pencil"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteService(${service.ServiceID})" title="Delete">
-                    <i class="bi bi-trash"></i>
-                </button>
+                <small>${service.Description || '<span class="text-muted">N/A</span>'}</small>
+            </td>
+            <td>
+                <strong>₱${parseFloat(service.PricePerPerson).toLocaleString('en-PH')}/person</strong>
+            </td>
+            <td>
+                <span class="badge ${service.IsActive == 1 ? 'bg-success' : 'bg-secondary'}">
+                    ${service.IsActive == 1 ? 'Active' : 'Inactive'}
+                </span>
+            </td>
+            <td>
+                <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" class="btn btn-outline-secondary" onclick="viewService(${service.ServiceID})" title="View Details">
+                        <i class="bi bi-eye"></i>
+                    </button>
+                    <button type="button" class="btn btn-outline-primary" onclick="editService(${service.ServiceID})" title="Edit">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button type="button" class="btn btn-outline-danger" onclick="deleteService(${service.ServiceID})" title="Delete">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
             </td>
         </tr>
     `).join('');
@@ -2845,14 +2855,59 @@ async function loadSalesData() {
 }
 
 // ===== REPORTS CHARTS =====
-function loadReportsCharts() {
+function applyReportFilters() {
+    const startDate = document.getElementById('filterStartDate').value;
+    const endDate = document.getElementById('filterEndDate').value;
+    const reportType = document.getElementById('reportType').value;
+    
+    if (!startDate || !endDate) {
+        alert('Please select both start and end dates');
+        return;
+    }
+    
+    if (new Date(startDate) > new Date(endDate)) {
+        alert('Start date must be before end date');
+        return;
+    }
+    
+    loadReportsCharts(startDate, endDate, reportType);
+}
+
+function loadReportsCharts(startDate = null, endDate = null, reportType = 'bookings') {
     const ctx1 = document.getElementById('salesCategoryChart');
+    const ctx2 = document.getElementById('monthlyPerformanceChart');
+    
+    if (reportType === 'bookings') {
+        loadBookingsReport(ctx1, ctx2, startDate, endDate);
+    } else if (reportType === 'sales') {
+        loadSalesReport(ctx1, ctx2, startDate, endDate);
+    } else if (reportType === 'revenue') {
+        loadRevenueReport(ctx1, ctx2, startDate, endDate);
+    } else if (reportType === 'client') {
+        loadClientReport(ctx1, ctx2, startDate, endDate);
+    }
+}
+
+function loadBookingsReport(ctx1, ctx2, startDate, endDate) {
     if (ctx1 && typeof Chart !== 'undefined') {
         fetch(API_BASE + 'bookings/index.php', { credentials: 'include' })
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    const bookings = data.data.bookings;
+                    let bookings = data.data.bookings;
+                    
+                    // Apply date filtering if provided
+                    if (startDate && endDate) {
+                        const start = new Date(startDate);
+                        const end = new Date(endDate);
+                        end.setHours(23, 59, 59, 999);
+                        
+                        bookings = bookings.filter(b => {
+                            const bookingDate = new Date(b.EventDate);
+                            return bookingDate >= start && bookingDate <= end;
+                        });
+                    }
+                    
                     const statusCounts = {
                         'Pending': bookings.filter(b => b.Status === 'Pending').length,
                         'Confirmed': bookings.filter(b => b.Status === 'Confirmed').length,
@@ -2860,7 +2915,11 @@ function loadReportsCharts() {
                         'Cancelled': bookings.filter(b => b.Status === 'Cancelled').length
                     };
                     
-                    new Chart(ctx1, {
+                    if (window.salesCategoryChartInstance) {
+                        window.salesCategoryChartInstance.destroy();
+                    }
+                    
+                    window.salesCategoryChartInstance = new Chart(ctx1, {
                         type: 'doughnut',
                         data: {
                             labels: Object.keys(statusCounts),
@@ -2871,35 +2930,377 @@ function loadReportsCharts() {
                         },
                         options: {
                             responsive: true,
-                            maintainAspectRatio: true
+                            maintainAspectRatio: true,
+                            plugins: {
+                                title: {
+                                    display: true,
+                                    text: 'Bookings by Status'
+                                }
+                            }
                         }
                     });
+                    
+                    // Update ctx2 with monthly bookings
+                    if (ctx2) {
+                        const monthlyData = {};
+                        bookings.forEach(b => {
+                            const date = new Date(b.EventDate);
+                            const monthKey = date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+                            monthlyData[monthKey] = (monthlyData[monthKey] || 0) + 1;
+                        });
+                        
+                        const labels = Object.keys(monthlyData);
+                        const values = Object.values(monthlyData);
+                        
+                        if (window.monthlyPerformanceChartInstance) {
+                            window.monthlyPerformanceChartInstance.destroy();
+                        }
+                        
+                        window.monthlyPerformanceChartInstance = new Chart(ctx2, {
+                            type: 'bar',
+                            data: {
+                                labels: labels.length > 0 ? labels : ['No Data'],
+                                datasets: [{
+                                    label: 'Bookings',
+                                    data: values.length > 0 ? values : [0],
+                                    backgroundColor: '#000'
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: true,
+                                plugins: {
+                                    title: {
+                                        display: true,
+                                        text: 'Monthly Bookings'
+                                    }
+                                },
+                                scales: {
+                                    y: {
+                                        beginAtZero: true
+                                    }
+                                }
+                            }
+                        });
+                    }
                 }
             });
     }
-    
-    const ctx2 = document.getElementById('monthlyPerformanceChart');
-    if (ctx2 && typeof Chart !== 'undefined') {
-        new Chart(ctx2, {
-            type: 'bar',
-            data: {
-                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-                datasets: [{
-                    label: 'Events',
-                    data: [12, 19, 15, 25, 22, 30],
-                    backgroundColor: '#000'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                scales: {
-                    y: {
-                        beginAtZero: true
+}
+
+function loadSalesReport(ctx1, ctx2, startDate, endDate) {
+    if (ctx1 && typeof Chart !== 'undefined') {
+        fetch(API_BASE + 'bookings/index.php', { credentials: 'include' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    let bookings = data.data.bookings;
+                    
+                    if (startDate && endDate) {
+                        const start = new Date(startDate);
+                        const end = new Date(endDate);
+                        end.setHours(23, 59, 59, 999);
+                        
+                        bookings = bookings.filter(b => {
+                            const bookingDate = new Date(b.EventDate);
+                            return bookingDate >= start && bookingDate <= end;
+                        });
+                    }
+                    
+                    // Group by event type
+                    const eventTypeCounts = {};
+                    bookings.forEach(b => {
+                        const type = b.EventType || 'Other';
+                        eventTypeCounts[type] = (eventTypeCounts[type] || 0) + 1;
+                    });
+                    
+                    if (window.salesCategoryChartInstance) {
+                        window.salesCategoryChartInstance.destroy();
+                    }
+                    
+                    window.salesCategoryChartInstance = new Chart(ctx1, {
+                        type: 'doughnut',
+                        data: {
+                            labels: Object.keys(eventTypeCounts),
+                            datasets: [{
+                                data: Object.values(eventTypeCounts),
+                                backgroundColor: ['#000', '#6c757d', '#495057', '#adb5bd', '#dee2e6']
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: {
+                                title: {
+                                    display: true,
+                                    text: 'Sales by Event Type'
+                                }
+                            }
+                        }
+                    });
+                    
+                    if (ctx2) {
+                        const monthlySales = {};
+                        bookings.forEach(b => {
+                            const date = new Date(b.EventDate);
+                            const monthKey = date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+                            monthlySales[monthKey] = (monthlySales[monthKey] || 0) + 1;
+                        });
+                        
+                        const labels = Object.keys(monthlySales);
+                        const values = Object.values(monthlySales);
+                        
+                        if (window.monthlyPerformanceChartInstance) {
+                            window.monthlyPerformanceChartInstance.destroy();
+                        }
+                        
+                        window.monthlyPerformanceChartInstance = new Chart(ctx2, {
+                            type: 'line',
+                            data: {
+                                labels: labels.length > 0 ? labels : ['No Data'],
+                                datasets: [{
+                                    label: 'Sales',
+                                    data: values.length > 0 ? values : [0],
+                                    borderColor: '#000',
+                                    backgroundColor: 'rgba(0,0,0,0.1)',
+                                    fill: true,
+                                    tension: 0.4
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: true,
+                                plugins: {
+                                    title: {
+                                        display: true,
+                                        text: 'Monthly Sales Trend'
+                                    }
+                                },
+                                scales: {
+                                    y: {
+                                        beginAtZero: true
+                                    }
+                                }
+                            }
+                        });
                     }
                 }
-            }
-        });
+            });
+    }
+}
+
+function loadRevenueReport(ctx1, ctx2, startDate, endDate) {
+    if (ctx1 && typeof Chart !== 'undefined') {
+        fetch(API_BASE + 'bookings/index.php', { credentials: 'include' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    let bookings = data.data.bookings;
+                    
+                    if (startDate && endDate) {
+                        const start = new Date(startDate);
+                        const end = new Date(endDate);
+                        end.setHours(23, 59, 999);
+                        
+                        bookings = bookings.filter(b => {
+                            const bookingDate = new Date(b.EventDate);
+                            return bookingDate >= start && bookingDate <= end;
+                        });
+                    }
+                    
+                    // Group by payment status
+                    const paymentCounts = {
+                        'Paid': bookings.filter(b => b.PaymentStatus === 'Paid').length,
+                        'Pending': bookings.filter(b => b.PaymentStatus === 'Pending Payment').length,
+                        'Processing': bookings.filter(b => b.PaymentStatus === 'Processing').length,
+                        'Failed': bookings.filter(b => b.PaymentStatus === 'Failed').length
+                    };
+                    
+                    const totalRevenue = bookings
+                        .filter(b => b.PaymentStatus === 'Paid')
+                        .reduce((sum, b) => sum + parseFloat(b.TotalAmount || 0), 0);
+                    
+                    if (window.salesCategoryChartInstance) {
+                        window.salesCategoryChartInstance.destroy();
+                    }
+                    
+                    window.salesCategoryChartInstance = new Chart(ctx1, {
+                        type: 'doughnut',
+                        data: {
+                            labels: Object.keys(paymentCounts),
+                            datasets: [{
+                                data: Object.values(paymentCounts),
+                                backgroundColor: ['#28a745', '#6c757d', '#ffc107', '#dc3545']
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: {
+                                title: {
+                                    display: true,
+                                    text: 'Revenue by Payment Status'
+                                },
+                                legend: {
+                                    position: 'bottom'
+                                }
+                            }
+                        }
+                    });
+                    
+                    if (ctx2) {
+                        const monthlyRevenue = {};
+                        bookings.forEach(b => {
+                            if (b.PaymentStatus === 'Paid') {
+                                const date = new Date(b.EventDate);
+                                const monthKey = date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+                                monthlyRevenue[monthKey] = (monthlyRevenue[monthKey] || 0) + parseFloat(b.TotalAmount || 0);
+                            }
+                        });
+                        
+                        const labels = Object.keys(monthlyRevenue);
+                        const values = Object.values(monthlyRevenue);
+                        
+                        if (window.monthlyPerformanceChartInstance) {
+                            window.monthlyPerformanceChartInstance.destroy();
+                        }
+                        
+                        window.monthlyPerformanceChartInstance = new Chart(ctx2, {
+                            type: 'bar',
+                            data: {
+                                labels: labels.length > 0 ? labels : ['No Data'],
+                                datasets: [{
+                                    label: 'Revenue (₱)',
+                                    data: values.length > 0 ? values : [0],
+                                    backgroundColor: '#28a745'
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: true,
+                                plugins: {
+                                    title: {
+                                        display: true,
+                                        text: `Monthly Revenue | Total: ₱${totalRevenue.toLocaleString('en-PH', {minimumFractionDigits: 2})}`
+                                    }
+                                },
+                                scales: {
+                                    y: {
+                                        beginAtZero: true
+                                    }
+                                }
+                            }
+                        });
+                    }
+                }
+            });
+    }
+}
+
+function loadClientReport(ctx1, ctx2, startDate, endDate) {
+    if (ctx1 && typeof Chart !== 'undefined') {
+        fetch(API_BASE + 'bookings/index.php', { credentials: 'include' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    let bookings = data.data.bookings;
+                    
+                    if (startDate && endDate) {
+                        const start = new Date(startDate);
+                        const end = new Date(endDate);
+                        end.setHours(23, 59, 59, 999);
+                        
+                        bookings = bookings.filter(b => {
+                            const bookingDate = new Date(b.EventDate);
+                            return bookingDate >= start && bookingDate <= end;
+                        });
+                    }
+                    
+                    const totalClients = new Set(bookings.map(b => b.ClientID)).size;
+                    const repeatingClients = {};
+                    
+                    bookings.forEach(b => {
+                        repeatingClients[b.ClientID] = (repeatingClients[b.ClientID] || 0) + 1;
+                    });
+                    
+                    const oneTimeClients = Object.values(repeatingClients).filter(count => count === 1).length;
+                    const repeatingClientCount = totalClients - oneTimeClients;
+                    
+                    if (window.salesCategoryChartInstance) {
+                        window.salesCategoryChartInstance.destroy();
+                    }
+                    
+                    window.salesCategoryChartInstance = new Chart(ctx1, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['One-time Clients', 'Repeat Clients'],
+                            datasets: [{
+                                data: [oneTimeClients, repeatingClientCount],
+                                backgroundColor: ['#6c757d', '#000']
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: {
+                                title: {
+                                    display: true,
+                                    text: `Total Clients: ${totalClients}`
+                                }
+                            }
+                        }
+                    });
+                    
+                    if (ctx2) {
+                        const monthlyClients = {};
+                        bookings.forEach(b => {
+                            const date = new Date(b.EventDate);
+                            const monthKey = date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+                            if (!monthlyClients[monthKey]) {
+                                monthlyClients[monthKey] = new Set();
+                            }
+                            monthlyClients[monthKey].add(b.ClientID);
+                        });
+                        
+                        const labels = Object.keys(monthlyClients);
+                        const values = Object.keys(monthlyClients).map(month => monthlyClients[month].size);
+                        
+                        if (window.monthlyPerformanceChartInstance) {
+                            window.monthlyPerformanceChartInstance.destroy();
+                        }
+                        
+                        window.monthlyPerformanceChartInstance = new Chart(ctx2, {
+                            type: 'line',
+                            data: {
+                                labels: labels.length > 0 ? labels : ['No Data'],
+                                datasets: [{
+                                    label: 'New Clients',
+                                    data: values.length > 0 ? values : [0],
+                                    borderColor: '#000',
+                                    backgroundColor: 'rgba(0,0,0,0.1)',
+                                    fill: true,
+                                    tension: 0.4
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: true,
+                                plugins: {
+                                    title: {
+                                        display: true,
+                                        text: 'Monthly New Clients'
+                                    }
+                                },
+                                scales: {
+                                    y: {
+                                        beginAtZero: true
+                                    }
+                                }
+                            }
+                        });
+                    }
+                }
+            });
     }
 }
 
@@ -4830,7 +5231,6 @@ function viewAgreement(bookingID) {
                 `;
                 
                 document.getElementById('printAgreementBtn').style.display = 'inline-block';
-                document.getElementById('downloadAgreementBtn').style.display = 'inline-block';
             } else if (agreement.Status === 'unsigned' || !agreement.Status) {
                 document.getElementById('adminSignatureSection').innerHTML = `
                     <div class="alert alert-warning">
@@ -4841,7 +5241,6 @@ function viewAgreement(bookingID) {
                     </div>
                 `;
                 document.getElementById('printAgreementBtn').style.display = 'none';
-                document.getElementById('downloadAgreementBtn').style.display = 'none';
             }
 
             document.getElementById('adminAgreementModal').dataset.bookingId = bookingID;
@@ -4890,7 +5289,6 @@ function viewAgreement(bookingID) {
             document.getElementById('adminAgreementPreview').innerHTML = message;
             document.getElementById('adminSignatureSection').innerHTML = '';
             document.getElementById('printAgreementBtn').style.display = 'none';
-            document.getElementById('downloadAgreementBtn').style.display = 'none';
             
         } else {
             const errorMsg = data.message || 'Agreement not found or not yet created';
@@ -4905,7 +5303,6 @@ function viewAgreement(bookingID) {
             `;
             document.getElementById('adminSignatureSection').innerHTML = '';
             document.getElementById('printAgreementBtn').style.display = 'none';
-            document.getElementById('downloadAgreementBtn').style.display = 'none';
         }
     })
     .catch(error => {
@@ -4920,7 +5317,6 @@ function viewAgreement(bookingID) {
         `;
         document.getElementById('adminSignatureSection').innerHTML = '';
         document.getElementById('printAgreementBtn').style.display = 'none';
-        document.getElementById('downloadAgreementBtn').style.display = 'none';
     });
 
     const bsModal = new bootstrap.Modal(modal);
@@ -4984,9 +5380,6 @@ function createAdminAgreementModal() {
                     </button>
                     <button type="button" id="printAgreementBtn" class="btn btn-info" onclick="printAgreement()" style="display: none;">
                         <i class="bi bi-printer me-1"></i>Print
-                    </button>
-                    <button type="button" id="downloadAgreementBtn" class="btn btn-primary" onclick="downloadAgreementPDF()" style="display: none;">
-                        <i class="bi bi-download me-1"></i>Download PDF
                     </button>
                 </div>
             </div>

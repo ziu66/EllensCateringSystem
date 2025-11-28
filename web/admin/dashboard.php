@@ -87,13 +87,6 @@ $adminId = $_SESSION['admin_id'] ?? 0;
                         <span>Reports</span>
                     </a>
                 </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="#" data-page="notifications">
-                        <i class="bi bi-bell"></i>
-                        <span>Notifications</span>
-                        <span class="badge bg-light text-dark ms-auto">3</span>
-                    </a>
-                </li>
             </ul>
         </nav>
 

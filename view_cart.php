@@ -143,6 +143,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     exit;
                 }
                 
+                // Get selected items
+                $selectedIndices = $_POST['selected_items'] ?? [];
+                if (empty($selectedIndices)) {
+                    echo json_encode(['success' => false, 'message' => 'Please select at least one item']);
+                    exit;
+                }
+                
+                // Filter cart to only include selected items
+                $selectedItems = [];
+                foreach ($selectedIndices as $index) {
+                    $index = intval($index);
+                    if (isset($_SESSION['food_cart'][$index])) {
+                        $selectedItems[] = $_SESSION['food_cart'][$index];
+                    }
+                }
+                
+                if (empty($selectedItems)) {
+                    echo json_encode(['success' => false, 'message' => 'Invalid items selected']);
+                    exit;
+                }
+                
                 // Validate payment method
                 $paymentMethod = $_POST['payment_method'] ?? '';
                 if (empty($paymentMethod) || !in_array($paymentMethod, ['Cash', 'GCash', 'Bank Transfer'])) {
@@ -174,9 +195,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     exit;
                 }
                 
-                // Calculate total amount
+                // Calculate total amount from selected items only
                 $totalAmount = 0;
-                foreach ($_SESSION['food_cart'] as $item) {
+                foreach ($selectedItems as $item) {
                     $totalAmount += $item['subtotal'];
                 }
                 
@@ -191,7 +212,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($sizeColumnExists) {
                         $insertStmt = $conn->prepare("INSERT INTO cart (ClientID, ItemType, ItemName, ItemDescription, Size, PricePerUnit, Quantity, Subtotal) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
                         
-                        foreach ($_SESSION['food_cart'] as $item) {
+                        foreach ($selectedItems as $item) {
                             $itemType = 'menu';
                             
                             $insertStmt->bind_param(
@@ -219,9 +240,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $eventLocation = 'To Be Determined';
                     $numberOfGuests = 0;
                     
-                    // Build special requests from cart items with payment method
+                    // Build special requests from selected cart items with payment method
                     $specialRequests = "Food Menu Order (Payment: $paymentMethod):\n";
-                    foreach ($_SESSION['food_cart'] as $item) {
+                    foreach ($selectedItems as $item) {
                         $specialRequests .= "- {$item['item_name']} ({$item['size']}) x{$item['quantity']}\n";
                     }
                     
@@ -263,7 +284,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     
                     // Step 4: Create cart order record with payment method
                     $insertOrder = $conn->prepare("INSERT INTO cart_orders (ClientID, BookingID, QuotationID, TotalAmount, Status, Notes) VALUES (?, ?, ?, ?, 'Pending', ?)");
-                    $notes = "Food menu order with " . count($_SESSION['food_cart']) . " items. Payment: " . $paymentMethod;
+                    $notes = "Food menu order with " . count($selectedItems) . " items. Payment: " . $paymentMethod;
                     $insertOrder->bind_param("iiids", $clientID, $bookingID, $quotationID, $totalAmount, $notes);
                     
                     if (!$insertOrder->execute()) {
@@ -276,7 +297,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Step 5: Insert order items
                     $insertOrderItem = $conn->prepare("INSERT INTO cart_order_items (OrderID, ItemType, ItemName, ItemDescription, Size, PricePerUnit, Quantity, Subtotal) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
                     
-                    foreach ($_SESSION['food_cart'] as $item) {
+                    foreach ($selectedItems as $item) {
                         $itemType = 'menu';
                         $insertOrderItem->bind_param(
                             "issssdid",
@@ -315,8 +336,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         logActivity($clientID, 'client', 'order_created', "Created food order #$orderID with booking #$bookingID and quotation #$quotationID. Payment: $paymentMethod");
                     }
                     
-                    // Clear session cart after successful save
-                    $_SESSION['food_cart'] = [];
+                    // Remove only selected items from cart, keep the rest
+                    foreach ($selectedIndices as $index) {
+                        $index = intval($index);
+                        // Mark for removal (can't splice while iterating)
+                    }
+                    // Sort indices in reverse to avoid shifting issues
+                    rsort($selectedIndices);
+                    foreach ($selectedIndices as $index) {
+                        $index = intval($index);
+                        array_splice($_SESSION['food_cart'], $index, 1);
+                    }
                     
                     // Response based on payment method
                     if ($paymentMethod === 'GCash') {
@@ -750,7 +780,7 @@ foreach ($cartItems as $item) {
 
         /* GCash Modal - Simplified */
         .gcash-modal {
-            display: none;
+            display: flex !important;
             position: fixed;
             z-index: 9999;
             left: 0;
@@ -758,15 +788,22 @@ foreach ($cartItems as $item) {
             width: 100%;
             height: 100%;
             background-color: rgba(0, 0, 0, 0.7);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .gcash-modal[style*="display: none"] {
+            display: none !important;
         }
 
         .gcash-modal-content {
             background-color: white;
-            margin: 8% auto;
-            padding: 35px;
+            padding: 25px 20px;
             border-radius: 16px;
-            width: 90%;
-            max-width: 450px;
+            width: 92%;
+            max-width: 420px;
+            max-height: 90vh;
+            overflow-y: auto;
             text-align: center;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
         }
@@ -898,9 +935,14 @@ foreach ($cartItems as $item) {
             <?php else: ?>
                 <div class="row">
                     <div class="col-lg-7">
+                        <div style="display: flex; align-items: center; margin-bottom: 15px; padding: 10px; background-color: #f8f9fa; border-radius: 5px;">
+                            <input type="checkbox" id="selectAllCheckbox" onchange="selectAllItems();" style="margin-right: 10px; cursor: pointer;">
+                            <label for="selectAllCheckbox" style="margin: 0; cursor: pointer; font-weight: 600;">Select All</label>
+                        </div>
                         <?php foreach ($cartItems as $index => $item): ?>
                             <div class="cart-item">
                                 <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <input type="checkbox" class="cart-item-checkbox" data-index="<?= $index ?>" onchange="updateSelectAll(); updateTotal();" style="margin-right: 10px; margin-top: 5px; cursor: pointer;">
                                     <div class="flex-grow-1">
                                         <div class="item-name"><?= htmlspecialchars($item['item_name']) ?></div>
                                         <span class="item-size"><?= ucfirst(htmlspecialchars($item['size'])) ?></span>
@@ -1018,49 +1060,49 @@ foreach ($cartItems as $item) {
         <?php endif; ?>
     </div>
 
-    <!-- GCash QR Code Modal (Replace existing modal in view_cart.php) -->
-<div id="gcashModal" class="gcash-modal" style="display: none;">
+<!-- GCash QR Code Modal (Replace existing modal in view_cart.php) -->
+<div id="gcashModal" class="gcash-modal" style="display: none !important;">
     <div class="gcash-modal-content">
         <span class="close-modal" onclick="closeGCashModal()">&times;</span>
         <div class="gcash-logo">
             <i class="bi bi-phone-fill"></i>
         </div>
-        <h2 style="color: var(--primary-dark); font-weight: 700; margin-bottom: 8px; font-size: 1.5rem;">GCash Payment</h2>
-        <p style="color: var(--medium-gray); margin-bottom: 15px; font-size: 0.95rem;">Scan the QR code below to complete your payment</p>
+        <h2 style="color: var(--primary-dark); font-weight: 700; margin-bottom: 5px; font-size: 1.2rem;">GCash Payment</h2>
+        <p style="color: var(--medium-gray); margin-bottom: 12px; font-size: 0.85rem;">Scan the QR code below to complete your payment</p>
         
         <div class="qr-code-container">
-            <img id="gcashQRCode" src="gcash_qr.jpg" alt="GCash QR Code" style="width: 220px; height: 220px;">
+            <img id="gcashQRCode" src="gcash_qr.jpg" alt="GCash QR Code" style="width: 180px; height: 180px;">
         </div>
         
-        <div style="background: #f0f8ff; padding: 12px; border-radius: 10px; margin: 15px 0; font-size: 0.9rem;">
-            <p style="margin: 0; color: var(--text-dark); font-weight: 600;">
+        <div style="background: #f0f8ff; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 0.85rem;">
+            <p style="margin: 0; color: var(--text-dark); font-weight: 600; font-size: 0.9rem;">
                 <i class="bi bi-info-circle me-2"></i>Account: Ellen's Catering
             </p>
-            <p style="margin: 5px 0 0 0; color: var(--text-dark); font-weight: 600;">
+            <p style="margin: 3px 0 0 0; color: var(--text-dark); font-weight: 600; font-size: 0.9rem;">
                 <i class="bi bi-receipt me-2"></i>Order ID: #<span id="gcashOrderId"></span>
             </p>
-            <p style="margin: 8px 0 0 0; color: var(--text-dark); font-weight: 700; font-size: 1.2rem;">
+            <p style="margin: 5px 0 0 0; color: var(--text-dark); font-weight: 700; font-size: 1.1rem;">
                 Amount: ₱<span id="gcashAmount">0.00</span>
             </p>
         </div>
         
-        <div style="margin: 15px 0;">
-            <label style="display: block; margin-bottom: 8px; color: var(--text-dark); font-weight: 600; font-size: 0.95rem;">
+        <div style="margin: 10px 0;">
+            <label style="display: block; margin-bottom: 6px; color: var(--text-dark); font-weight: 600; font-size: 0.9rem;">
                 <i class="bi bi-key me-1"></i>GCash Reference Number <span style="color: red;">*</span>
             </label>
             <input type="text" id="gcashRefNumber" placeholder="Enter your GCash reference number" 
-                   style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem;" maxlength="20">
-            <small style="color: #666; display: block; margin-top: 5px;">
+                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 0.85rem; box-sizing: border-box;" maxlength="20">
+            <small style="color: #666; display: block; margin-top: 4px; font-size: 0.8rem;">
                 <i class="bi bi-info-circle me-1"></i>You can find this in your GCash app after payment
             </small>
         </div>
         
-        <p style="color: var(--medium-gray); font-size: 0.85rem; margin-bottom: 15px;">
+        <p style="color: var(--medium-gray); font-size: 0.8rem; margin-bottom: 12px;">
             <i class="bi bi-shield-check me-1"></i>
             Keep your reference number for verification.
         </p>
         
-        <button onclick="completeGCashPayment()" type="button" style="background: var(--primary-dark); color: white; border: none; padding: 10px 25px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.95rem; width: 100%;">
+        <button onclick="completeGCashPayment()" type="button" style="background: var(--primary-dark); color: white; border: none; padding: 8px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.9rem; width: 100%;">
             <i class="bi bi-check-circle me-2"></i>I've Completed Payment
         </button>
     </div>
@@ -1126,7 +1168,9 @@ foreach ($cartItems as $item) {
                 bankDetailsForm.style.display = 'none';
             }
             
-            document.getElementById('confirmOrderBtn').disabled = false;
+            // Enable confirm button only if at least one item is selected
+            const selectedCheckboxes = document.querySelectorAll('.cart-item-checkbox:checked');
+            document.getElementById('confirmOrderBtn').disabled = selectedCheckboxes.length === 0;
         }
 
         function updateQuantity(itemIndex, newQuantity) {
@@ -1213,6 +1257,13 @@ foreach ($cartItems as $item) {
         return;
     }
 
+    // Get selected items
+    const selectedCheckboxes = document.querySelectorAll('.cart-item-checkbox:checked');
+    if (selectedCheckboxes.length === 0) {
+        alert('Please select at least one item to checkout');
+        return;
+    }
+
     if (selectedPaymentMethod === 'Bank Transfer') {
         const cardNumber = document.getElementById('cardNumber').value.replace(/\s/g, '');
         const cardholderName = document.getElementById('cardholderName').value.trim();
@@ -1233,6 +1284,11 @@ foreach ($cartItems as $item) {
     const formData = new FormData();
     formData.append('action', 'confirm');
     formData.append('payment_method', selectedPaymentMethod);
+    
+    // Add selected item indices
+    selectedCheckboxes.forEach(checkbox => {
+        formData.append('selected_items[]', checkbox.getAttribute('data-index'));
+    });
     
     if (selectedPaymentMethod === 'Bank Transfer') {
         formData.append('card_number', document.getElementById('cardNumber').value.replace(/\s/g, ''));
@@ -1312,16 +1368,15 @@ function showGCashReferenceModal(orderId, amount) {
     document.body.style.overflow = 'hidden';
 }
 
-function closeGCashModal() {
-    const modal = document.getElementById('gcashModal');
-    if (modal) {
-        modal.style.display = 'none';
-        document.body.style.overflow = 'auto';
-        location.reload();
-    }
-}
+        function closeGCashModal() {
+            const modal = document.getElementById('gcashModal');
+            if (modal) {
+                modal.style.display = 'none';
+                document.body.style.overflow = 'auto';
+            }
+        }
 
-function completeGCashPayment() {
+        function completeGCashPayment() {
     const refNumber = document.getElementById('gcashRefNumber').value.trim();
     
     if (!refNumber) {
@@ -1356,7 +1411,8 @@ function completeGCashPayment() {
     .then(data => {
         if (data.success) {
             alert('✓ GCash payment recorded!\n\nYour reference number has been saved. We will verify your payment shortly.');
-            closeGCashModal();
+            // Redirect to bookings page after successful payment confirmation
+            window.location.href = 'my_bookings.php';
         } else {
             alert(data.message || 'Failed to save reference number');
             btn.innerHTML = originalText;
@@ -1450,7 +1506,6 @@ function closeBankReferenceModal() {
     if (modal) {
         modal.style.display = 'none';
         document.body.style.overflow = 'auto';
-        location.reload();
     }
 }
 
@@ -1490,7 +1545,8 @@ function completeBankTransfer() {
     .then(data => {
         if (data.success) {
             alert('✓ Bank transfer recorded!\n\nYour reference number has been saved. We will verify your payment shortly.');
-            closeBankReferenceModal();
+            // Redirect to bookings page after successful payment confirmation
+            window.location.href = 'my_bookings.php';
         } else {
             alert(data.message || 'Failed to save reference number');
             btn.innerHTML = originalText;
@@ -1670,6 +1726,79 @@ window.onclick = function(event) {
             // allow letters, spaces, dot and hyphen only
             e.target.value = e.target.value.replace(/[^0-9\p{L}\s\.\-]/gu, '').slice(0, 100);
         });
+    });
+
+    // Checkbox selection functions
+    function selectAllItems() {
+        const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+        const itemCheckboxes = document.querySelectorAll('.cart-item-checkbox');
+        itemCheckboxes.forEach(checkbox => {
+            checkbox.checked = selectAllCheckbox.checked;
+        });
+        updateTotal();
+    }
+
+    function updateSelectAll() {
+        const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+        const itemCheckboxes = document.querySelectorAll('.cart-item-checkbox');
+        const allChecked = Array.from(itemCheckboxes).every(checkbox => checkbox.checked);
+        const anyChecked = Array.from(itemCheckboxes).some(checkbox => checkbox.checked);
+        
+        selectAllCheckbox.checked = allChecked;
+        selectAllCheckbox.indeterminate = anyChecked && !allChecked;
+    }
+
+    function updateTotal() {
+        const selectedCheckboxes = document.querySelectorAll('.cart-item-checkbox:checked');
+        let selectedTotal = 0;
+        let selectedCount = 0;
+        
+        selectedCheckboxes.forEach(checkbox => {
+            selectedCount++;
+            const cartItem = checkbox.closest('.cart-item');
+            // Find the subtotal div - it's the second flex container's last div with the price
+            const bottomRow = cartItem.querySelector('.d-flex:last-of-type');
+            if (bottomRow) {
+                const subtotalDiv = bottomRow.querySelector('div:last-child');
+                if (subtotalDiv) {
+                    const subtotalText = subtotalDiv.textContent;
+                    const subtotal = parseFloat(subtotalText.replace('₱', '').replace(',', ''));
+                    selectedTotal += subtotal;
+                }
+            }
+        });
+        
+        // Update the summary-total span with class "summary-total"
+        const summaryTotal = document.querySelector('.summary-total');
+        if (summaryTotal) {
+            const spans = summaryTotal.querySelectorAll('span');
+            if (spans.length >= 2) {
+                spans[1].textContent = '₱' + selectedTotal.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+            }
+        }
+        
+        // Update both the subtotal row and items count
+        const summaryRows = document.querySelectorAll('.summary-row');
+        if (summaryRows.length >= 2) {
+            // Update Subtotal row
+            const subtotalRow = summaryRows[0];
+            const subtotalSpans = subtotalRow.querySelectorAll('span');
+            if (subtotalSpans.length >= 2) {
+                subtotalSpans[1].textContent = '₱' + selectedTotal.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+            }
+            
+            // Update Items count row
+            const itemsRow = summaryRows[1];
+            const itemsSpans = itemsRow.querySelectorAll('span');
+            if (itemsSpans.length >= 2) {
+                itemsSpans[1].textContent = selectedCount;
+            }
+        }
+    }
+
+    // Initialize cart on page load - set all totals to 0 since nothing is selected by default
+    document.addEventListener('DOMContentLoaded', function() {
+        updateTotal();
     });
     </script>
 </body>
