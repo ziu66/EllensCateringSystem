@@ -1875,380 +1875,443 @@ function cancelBooking(bookingId) {
         window.location.href = `cancel_booking.php?id=${bookingId}`;
     }
 }
-</script>
 
-    <style>
-    .payment-option-modal {
-        border: 2px solid var(--border-gray);
-        border-radius: 15px;
-        padding: 20px;
-        cursor: pointer;
-        transition: all 0.3s;
-        display: flex;
-        align-items: center;
+// Dropdown hover effect for desktop
+document.querySelectorAll('.nav-item.dropdown').forEach(dropdown => {
+    dropdown.addEventListener('mouseenter', () => {
+        if (window.innerWidth >= 992) {
+            dropdown.classList.add('show');
+            dropdown.querySelector('.dropdown-menu').classList.add('show');
+        }
+    });
+
+    dropdown.addEventListener('mouseleave', () => {
+        if (window.innerWidth >= 992) {
+            dropdown.classList.remove('show');
+            dropdown.querySelector('.dropdown-menu').classList.remove('show');
+        }
+    });
+});
+
+// Fixed Agreement Modal Functions
+let signatureCanvas = null;
+let signatureContext = null;
+let isDrawing = false;
+let currentBookingID = null;
+let currentClientID = null;
+let signaturePoints = []; // Store signature history for undo
+
+function openAgreementModal(bookingID, clientID, eventDate) {
+    currentBookingID = bookingID;
+    currentClientID = clientID;
+
+    // Create or show modal
+    let modal = document.getElementById('agreementModal');
+    if (!modal) {
+        createAgreementModal();
+        modal = document.getElementById('agreementModal');
     }
 
-    .payment-option-modal:hover {
-        border-color: var(--primary-dark);
-        background: var(--light-gray);
-        transform: translateX(5px);
-    }
+    // Show modal first
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
 
-    .payment-option-modal i {
-        color: var(--primary-dark);
-    }
-
-    .payment-option-compact {
-    border: 1.5px solid #e0e0e0;
-    border-radius: 12px;
-    padding: 12px 14px;
-    cursor: pointer;
-    transition: all 0.25s ease;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: white;
+    // Initialize after modal is shown
+    modal.addEventListener('shown.bs.modal', function() {
+        initSignatureCanvas();
+        loadAgreementPreview(bookingID, clientID);
+        checkAgreementStatus(bookingID, clientID);
+    }, { once: true });
 }
 
-    .payment-option-compact:hover {
-        border-color: var(--primary-dark);
-        background: #f8f9fa;
-        transform: translateY(-2px);
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    }
+function createAgreementModal() {
+    const modalHTML = `
+    <div class="modal fade" id="agreementModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content" style="border-radius: 16px; border: none;">
+                <div class="modal-header" style="background: linear-gradient(135deg, #000000, #212529); color: white; border-radius: 16px 16px 0 0; padding: 20px 24px; border: none;">
+                    <h5 class="modal-title">
+                        <i class="bi bi-file-earmark-pdf me-2"></i>Catering Agreement
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                    <div id="agreementPreview" style="background: white; padding: 20px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 20px; font-size: 0.9rem; line-height: 1.6;"></div>
 
-    .payment-option-compact:active {
-        transform: translateY(0px);
-    }
-
-    </style>
-
-    <!-- GCash QR Code Modal -->
-    <div id="gcashModal" class="gcash-modal" style="display: none;">
-        <div class="gcash-modal-content">
-            <span class="close-modal" onclick="closeGCashModal()">&times;</span>
-            <div class="gcash-logo">
-                <i class="bi bi-phone-fill"></i>
-            </div>
-            <h2 style="color: var(--primary-dark); font-weight: 700; margin-bottom: 8px; font-size: 1.5rem;">GCash Payment</h2>
-            <p style="color: var(--medium-gray); margin-bottom: 15px; font-size: 0.95rem;">Scan the QR code below to complete your payment</p>
-            
-            <div class="qr-code-container">
-                <img id="gcashQRCode" src="gcash_qr.jpg" alt="GCash QR Code">
-            </div>
-            
-            <div style="background: #f0f8ff; padding: 12px; border-radius: 10px; margin: 15px 0; font-size: 0.9rem;">
-                <p style="margin: 0; color: var(--text-dark); font-weight: 600;">
-                    <i class="bi bi-info-circle me-2"></i>Account: Ellen's Catering
-                </p>
-                <p style="margin: 5px 0 0 0; color: var(--text-dark); font-weight: 600;">
-                    <i class="bi bi-receipt me-2"></i>Booking ID: #<span id="gcashBookingId"></span>
-                </p>
-                <p style="margin: 8px 0 0 0; color: var(--text-dark); font-weight: 700; font-size: 1.2rem;">
-                    Amount: ₱<span id="gcashAmount">0.00</span>
-                </p>
-            </div>
-            
-            <div style="margin: 15px 0;">
-                <label style="display: block; margin-bottom: 8px; color: var(--text-dark); font-weight: 600; font-size: 0.95rem;">
-                    <i class="bi bi-key me-1"></i>GCash Reference Number <span style="color: red;">*</span>
-                </label>
-                <input type="text" id="gcashRefNumber" placeholder="Enter your GCash reference number" 
-                       style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem;" maxlength="20">
-                <small style="color: #666; display: block; margin-top: 5px;">
-                    <i class="bi bi-info-circle me-1"></i>You can find this in your GCash app after payment
-                </small>
-            </div>
-            
-            <p style="color: var(--medium-gray); font-size: 0.85rem; margin-bottom: 15px;">
-                <i class="bi bi-shield-check me-1"></i>
-                Keep your reference number for verification.
-            </p>
-            
-            <button onclick="completeGCashPayment()" type="button" style="background: var(--primary-dark); color: white; border: none; padding: 10px 25px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.95rem; width: 100%;">
-                <i class="bi bi-check-circle me-2"></i>I've Completed Payment
-            </button>
-        </div>
-    </div>
-
-    <script>
-        // Dropdown hover effect for desktop
-        document.querySelectorAll('.nav-item.dropdown').forEach(dropdown => {
-            dropdown.addEventListener('mouseenter', () => {
-                if (window.innerWidth >= 992) {
-                    dropdown.classList.add('show');
-                    dropdown.querySelector('.dropdown-menu').classList.add('show');
-                }
-            });
-
-            dropdown.addEventListener('mouseleave', () => {
-                if (window.innerWidth >= 992) {
-                    dropdown.classList.remove('show');
-                    dropdown.querySelector('.dropdown-menu').classList.remove('show');
-                }
-            });
-        });
-
-        // Agreement Modal Functions
-        let signatureCanvas = null;
-        let signatureContext = null;
-        let isDrawing = false;
-        let currentBookingID = null;
-        let currentClientID = null;
-
-        function openAgreementModal(bookingID, clientID, eventDate) {
-            currentBookingID = bookingID;
-            currentClientID = clientID;
-
-            // Check if already signed
-            checkAgreementStatus(bookingID, clientID);
-
-            // Create or show modal
-            let modal = document.getElementById('agreementModal');
-            if (!modal) {
-                createAgreementModal();
-                modal = document.getElementById('agreementModal');
-            }
-
-            // Initialize signature canvas
-            setTimeout(() => {
-                initSignatureCanvas();
-                loadAgreementPreview(bookingID, clientID);
-            }, 100);
-
-            const bsModal = new bootstrap.Modal(modal);
-            bsModal.show();
-        }
-
-        function createAgreementModal() {
-            const modalHTML = `
-            <div class="modal fade" id="agreementModal" tabindex="-1" aria-hidden="true">
-                <div class="modal-dialog modal-lg modal-dialog-centered">
-                    <div class="modal-content" style="border-radius: 16px; border: none;">
-                        <div class="modal-header" style="background: linear-gradient(135deg, #000000, #212529); color: white; border-radius: 16px 16px 0 0; padding: 20px 24px; border: none;">
-                            <h5 class="modal-title">
-                                <i class="bi bi-file-earmark-pdf me-2"></i>Catering Agreement
-                            </h5>
-                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    <div id="signatureSection" style="margin-top: 30px;">
+                        <h6 style="font-weight: 600; margin-bottom: 15px;">
+                            <i class="bi bi-pen me-2"></i>Your Signature
+                        </h6>
+                        <p style="color: #666; font-size: 0.85rem; margin-bottom: 10px;">
+                            Please sign below to confirm your agreement with the terms and conditions.
+                        </p>
+                        <div style="border: 2px dashed #ddd; border-radius: 8px; padding: 10px; background: #fafafa;">
+                            <canvas id="signatureCanvas" style="border: 1px solid #ddd; border-radius: 6px; cursor: crosshair; display: block; background: white; width: 100%; height: 150px; touch-action: none;"></canvas>
                         </div>
-                        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
-                            <div id="agreementPreview" style="background: white; padding: 20px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 20px; font-size: 0.9rem; line-height: 1.6;"></div>
-
-                            <div id="signatureSection" style="margin-top: 30px;">
-                                <h6 style="font-weight: 600; margin-bottom: 15px;">
-                                    <i class="bi bi-pen me-2"></i>Your Signature
-                                </h6>
-                                <p style="color: #666; font-size: 0.85rem; margin-bottom: 10px;">
-                                    Please sign below to confirm your agreement with the terms and conditions.
-                                </p>
-                                <div style="border: 2px dashed #ddd; border-radius: 8px; padding: 10px; background: #fafafa;">
-                                    <canvas id="signatureCanvas" width="400" height="150" style="border: 1px solid #ddd; border-radius: 6px; cursor: crosshair; display: block; background: white; width: 100%; height: 150px;"></canvas>
-                                </div>
-                                <div style="margin-top: 10px; display: flex; gap: 10px;">
-                                    <button type="button" class="btn btn-outline-secondary" onclick="clearSignature()" style="flex: 1;">
-                                        <i class="bi bi-arrow-counterclockwise me-1"></i>Clear
-                                    </button>
-                                    <button type="button" class="btn btn-outline-secondary" onclick="undoSignature()" style="flex: 1;">
-                                        <i class="bi bi-arrow-left me-1"></i>Undo
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="modal-footer" style="border-top: 1px solid #ddd; padding: 20px 24px;">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                                <i class="bi bi-x me-1"></i>Cancel
+                        <div style="margin-top: 10px; display: flex; gap: 10px;">
+                            <button type="button" class="btn btn-outline-secondary" onclick="clearSignature()" style="flex: 1;">
+                                <i class="bi bi-arrow-counterclockwise me-1"></i>Clear
                             </button>
-                            <button type="button" class="btn btn-primary" onclick="submitSignature()" style="background: var(--primary-dark); border: none;">
-                                <i class="bi bi-check-circle me-1"></i>Sign & Submit
+                            <button type="button" class="btn btn-outline-secondary" onclick="undoSignature()" style="flex: 1;">
+                                <i class="bi bi-arrow-left me-1"></i>Undo
                             </button>
                         </div>
                     </div>
                 </div>
+                <div class="modal-footer" style="border-top: 1px solid #ddd; padding: 20px 24px;">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x me-1"></i>Cancel
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="submitSignature()" style="background: var(--primary-dark); border: none;">
+                        <i class="bi bi-check-circle me-1"></i>Sign & Submit
+                    </button>
+                </div>
             </div>
-            `;
+        </div>
+    </div>
+    `;
 
-            document.body.insertAdjacentHTML('beforeend', modalHTML);
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
+
+function initSignatureCanvas() {
+    signatureCanvas = document.getElementById('signatureCanvas');
+    if (!signatureCanvas) {
+        console.error('Signature canvas not found');
+        return;
+    }
+
+    // Get the actual display size of the canvas
+    const rect = signatureCanvas.getBoundingClientRect();
+    
+    // Set the canvas resolution to match display size
+    signatureCanvas.width = rect.width;
+    signatureCanvas.height = rect.height;
+    
+    signatureContext = signatureCanvas.getContext('2d');
+    
+    // Set drawing properties
+    signatureContext.lineWidth = 2;
+    signatureContext.lineCap = 'round';
+    signatureContext.lineJoin = 'round';
+    signatureContext.strokeStyle = '#000000';
+    
+    // Clear signature points
+    signaturePoints = [];
+    
+    // Remove all existing event listeners by cloning
+    const newCanvas = signatureCanvas.cloneNode(true);
+    signatureCanvas.parentNode.replaceChild(newCanvas, signatureCanvas);
+    signatureCanvas = newCanvas;
+    signatureContext = signatureCanvas.getContext('2d');
+    
+    // Reapply drawing properties
+    signatureContext.lineWidth = 2;
+    signatureContext.lineCap = 'round';
+    signatureContext.lineJoin = 'round';
+    signatureContext.strokeStyle = '#000000';
+    
+    // Mouse events
+    signatureCanvas.addEventListener('mousedown', startDrawing, false);
+    signatureCanvas.addEventListener('mousemove', draw, false);
+    signatureCanvas.addEventListener('mouseup', stopDrawing, false);
+    signatureCanvas.addEventListener('mouseleave', stopDrawing, false);
+
+    // Touch events for mobile
+    signatureCanvas.addEventListener('touchstart', handleTouchStart, false);
+    signatureCanvas.addEventListener('touchmove', handleTouchMove, false);
+    signatureCanvas.addEventListener('touchend', stopDrawing, false);
+    
+    console.log('Signature canvas initialized:', {
+        width: signatureCanvas.width,
+        height: signatureCanvas.height,
+        displayWidth: rect.width,
+        displayHeight: rect.height
+    });
+}
+
+function getMousePos(canvas, evt) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+        x: evt.clientX - rect.left,
+        y: evt.clientY - rect.top
+    };
+}
+
+function getTouchPos(canvas, touch) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+        x: touch.clientX - rect.left,
+        y: touch.clientY - rect.top
+    };
+}
+
+function startDrawing(e) {
+    if (!signatureCanvas || !signatureContext) return;
+    
+    e.preventDefault();
+    isDrawing = true;
+    
+    const pos = getMousePos(signatureCanvas, e);
+    
+    signatureContext.beginPath();
+    signatureContext.moveTo(pos.x, pos.y);
+    
+    // Store point for undo
+    if (signaturePoints.length === 0 || signaturePoints[signaturePoints.length - 1].length > 0) {
+        signaturePoints.push([]);
+    }
+    signaturePoints[signaturePoints.length - 1].push(pos);
+    
+    console.log('Started drawing at', pos);
+}
+
+function draw(e) {
+    if (!isDrawing || !signatureCanvas || !signatureContext) return;
+    
+    e.preventDefault();
+    
+    const pos = getMousePos(signatureCanvas, e);
+    
+    signatureContext.lineTo(pos.x, pos.y);
+    signatureContext.stroke();
+    
+    // Store point for undo
+    if (signaturePoints.length > 0) {
+        signaturePoints[signaturePoints.length - 1].push(pos);
+    }
+}
+
+function stopDrawing(e) {
+    if (!signatureContext) return;
+    
+    if (e) e.preventDefault();
+    
+    if (isDrawing) {
+        isDrawing = false;
+        signatureContext.closePath();
+        console.log('Stopped drawing');
+    }
+}
+
+function handleTouchStart(e) {
+    e.preventDefault();
+    if (e.touches.length === 0) return;
+    
+    const touch = e.touches[0];
+    const pos = getTouchPos(signatureCanvas, touch);
+    
+    isDrawing = true;
+    signatureContext.beginPath();
+    signatureContext.moveTo(pos.x, pos.y);
+    
+    if (signaturePoints.length === 0 || signaturePoints[signaturePoints.length - 1].length > 0) {
+        signaturePoints.push([]);
+    }
+    signaturePoints[signaturePoints.length - 1].push(pos);
+}
+
+function handleTouchMove(e) {
+    if (!isDrawing) return;
+    
+    e.preventDefault();
+    if (e.touches.length === 0) return;
+    
+    const touch = e.touches[0];
+    const pos = getTouchPos(signatureCanvas, touch);
+    
+    signatureContext.lineTo(pos.x, pos.y);
+    signatureContext.stroke();
+    
+    if (signaturePoints.length > 0) {
+        signaturePoints[signaturePoints.length - 1].push(pos);
+    }
+}
+
+function clearSignature() {
+    if (signatureContext && signatureCanvas) {
+        signatureContext.clearRect(0, 0, signatureCanvas.width, signatureCanvas.height);
+        signaturePoints = [];
+        console.log('Signature cleared');
+    }
+}
+
+function undoSignature() {
+    if (signaturePoints.length === 0) return;
+    
+    // Remove last stroke
+    signaturePoints.pop();
+    
+    // Redraw all remaining strokes
+    signatureContext.clearRect(0, 0, signatureCanvas.width, signatureCanvas.height);
+    
+    signaturePoints.forEach(stroke => {
+        if (stroke.length === 0) return;
+        
+        signatureContext.beginPath();
+        signatureContext.moveTo(stroke[0].x, stroke[0].y);
+        
+        for (let i = 1; i < stroke.length; i++) {
+            signatureContext.lineTo(stroke[i].x, stroke[i].y);
         }
+        
+        signatureContext.stroke();
+        signatureContext.closePath();
+    });
+    
+    console.log('Undo - Strokes remaining:', signaturePoints.length);
+}
 
-        function initSignatureCanvas() {
-            signatureCanvas = document.getElementById('signatureCanvas');
-            if (!signatureCanvas) return;
-
-            signatureContext = signatureCanvas.getContext('2d');
+function loadAgreementPreview(bookingID, clientID) {
+    const previewDiv = document.getElementById('agreementPreview');
+    previewDiv.innerHTML = '<p class="text-center"><i class="bi bi-hourglass-split"></i> Loading agreement...</p>';
+    
+    fetch(`./web/api/agreements/index.php?action=get_agreement&booking_id=${bookingID}&client_id=${clientID}`)
+        .then(response => response.json())
+        .then(data => {
+            console.log('Agreement API Response:', data);
             
-            // Set canvas resolution properly with device pixel ratio
-            const dpr = window.devicePixelRatio || 1;
-            const rect = signatureCanvas.getBoundingClientRect();
-            signatureCanvas.width = rect.width * dpr;
-            signatureCanvas.height = rect.height * dpr;
-            signatureContext.scale(dpr, dpr);
-            
-            // Set style properties
-            signatureContext.lineWidth = 2;
-            signatureContext.lineCap = 'round';
-            signatureContext.lineJoin = 'round';
-            signatureContext.strokeStyle = '#000000';
-
-            // Remove old listeners and set up new ones
-            const newCanvas = signatureCanvas.cloneNode(true);
-            signatureCanvas.parentNode.replaceChild(newCanvas, signatureCanvas);
-            signatureCanvas = newCanvas;
-            signatureContext = signatureCanvas.getContext('2d');
-            signatureContext.scale(dpr, dpr);
-            signatureContext.lineWidth = 2;
-            signatureContext.lineCap = 'round';
-            signatureContext.lineJoin = 'round';
-            signatureContext.strokeStyle = '#000000';
-            
-            signatureCanvas.addEventListener('mousedown', startDrawing, false);
-            signatureCanvas.addEventListener('mousemove', draw, false);
-            signatureCanvas.addEventListener('mouseup', stopDrawing, false);
-            signatureCanvas.addEventListener('mouseout', stopDrawing, false);
-
-            // Touch events
-            signatureCanvas.addEventListener('touchstart', handleTouch, false);
-            signatureCanvas.addEventListener('touchmove', handleTouch, false);
-            signatureCanvas.addEventListener('touchend', stopDrawing, false);
-        }
-
-        function startDrawing(e) {
-            if (!signatureCanvas || !signatureContext) return;
-            isDrawing = true;
-            const dpr = window.devicePixelRatio || 1;
-            const rect = signatureCanvas.getBoundingClientRect();
-            const x = (e.clientX - rect.left) / dpr;
-            const y = (e.clientY - rect.top) / dpr;
-            signatureContext.beginPath();
-            signatureContext.moveTo(x, y);
-        }
-
-        function draw(e) {
-            if (!isDrawing || !signatureCanvas || !signatureContext) return;
-            const dpr = window.devicePixelRatio || 1;
-            const rect = signatureCanvas.getBoundingClientRect();
-            const x = (e.clientX - rect.left) / dpr;
-            const y = (e.clientY - rect.top) / dpr;
-            signatureContext.lineTo(x, y);
-            signatureContext.stroke();
-        }
-
-        function stopDrawing() {
-            if (signatureContext) {
-                isDrawing = false;
-                signatureContext.closePath();
-            }
-        }
-
-        function handleTouch(e) {
-            e.preventDefault();
-            if (e.touches.length === 0) {
-                stopDrawing();
-                return;
-            }
-            const touch = e.touches[0];
-            
-            if (e.type === 'touchstart') {
-                startDrawing({clientX: touch.clientX, clientY: touch.clientY});
-            } else if (e.type === 'touchmove') {
-                draw({clientX: touch.clientX, clientY: touch.clientY});
-            } else if (e.type === 'touchend') {
-                stopDrawing();
-            }
-        }
-
-        function clearSignature() {
-            if (signatureContext) {
-                signatureContext.clearRect(0, 0, signatureCanvas.width, signatureCanvas.height);
-            }
-        }
-
-        function undoSignature() {
-            // Simple undo by clearing (can be enhanced with history)
-            clearSignature();
-        }
-
-        function loadAgreementPreview(bookingID, clientID) {
-            fetch(`./web/api/agreements/index.php?action=get_agreement&booking_id=${bookingID}&client_id=${clientID}`)
-                .then(response => response.json())
-                .then(data => {
-                    console.log('Agreement API Response:', data);
-                    
-                    if (data.success) {
-                        if (data.agreement && data.agreement.ContractFile) {
-                            // Decode base64 HTML and display
-                            try {
-                                const html = atob(data.agreement.ContractFile);
-                                document.getElementById('agreementPreview').innerHTML = html;
-                            } catch (e) {
-                                console.error('Error decoding agreement:', e);
-                                document.getElementById('agreementPreview').innerHTML = '<p class="text-danger">Error loading agreement preview: ' + e.message + '</p>';
-                            }
-                        } else {
-                            document.getElementById('agreementPreview').innerHTML = '<p class="text-danger">Agreement found but no content. Server response: ' + JSON.stringify(data.agreement) + '</p>';
-                        }
-                    } else {
-                        document.getElementById('agreementPreview').innerHTML = '<p class="text-danger">Error: ' + data.message + '</p>';
+            if (data.success) {
+                if (data.agreement && data.agreement.ContractFile) {
+                    try {
+                        const html = atob(data.agreement.ContractFile);
+                        previewDiv.innerHTML = html;
+                    } catch (e) {
+                        console.error('Error decoding agreement:', e);
+                        previewDiv.innerHTML = '<p class="text-danger"><i class="bi bi-exclamation-triangle"></i> Error loading agreement preview</p>';
                     }
-                })
-                .catch(error => {
-                    console.error('Error loading agreement:', error);
-                    document.getElementById('agreementPreview').innerHTML = '<p class="text-danger">Error loading agreement: ' + error.message + '</p>';
-                });
-        }
-
-        function checkAgreementStatus(bookingID, clientID) {
-            fetch(`./web/api/agreements/index.php?action=get_agreement&booking_id=${bookingID}&client_id=${clientID}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success && data.agreement.Status === 'signed') {
-                        document.getElementById('signatureSection').innerHTML = `
-                            <div class="alert alert-success">
-                                <i class="bi bi-check-circle me-2"></i>
-                                <strong>Agreement Signed</strong>
-                                <br>
-                                <small>Signed on: ${new Date(data.agreement.SignedDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</small>
-                            </div>
-                        `;
-                    }
-                })
-                .catch(error => console.error('Error checking status:', error));
-        }
-
-        function submitSignature() {
-            if (!signatureCanvas || signatureCanvas.toDataURL() === 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==') {
-                alert('Please draw your signature first');
-                return;
-            }
-
-            const signatureBase64 = signatureCanvas.toDataURL('image/png');
-
-            fetch('./web/api/agreements/index.php?action=save_signature', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    booking_id: currentBookingID,
-                    client_id: currentClientID,
-                    signature: signatureBase64
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Agreement signed successfully!');
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('agreementModal'));
-                    modal.hide();
-                    location.reload();
                 } else {
-                    alert('Error: ' + data.message);
+                    previewDiv.innerHTML = '<p class="text-warning"><i class="bi bi-exclamation-triangle"></i> Agreement found but no content available</p>';
                 }
-            })
-            .catch(error => {
-                console.error('Error submitting signature:', error);
-                alert('Error submitting signature');
-            });
+            } else {
+                previewDiv.innerHTML = '<p class="text-danger"><i class="bi bi-x-circle"></i> ' + data.message + '</p>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading agreement:', error);
+            previewDiv.innerHTML = '<p class="text-danger"><i class="bi bi-x-circle"></i> Error loading agreement</p>';
+        });
+}
+
+function checkAgreementStatus(bookingID, clientID) {
+    fetch(`./web/api/agreements/index.php?action=get_agreement&booking_id=${bookingID}&client_id=${clientID}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.agreement && data.agreement.Status === 'signed') {
+                const signatureSection = document.getElementById('signatureSection');
+                if (signatureSection) {
+                    signatureSection.innerHTML = `
+                        <div class="alert alert-success">
+                            <i class="bi bi-check-circle-fill me-2"></i>
+                            <strong>Agreement Already Signed</strong>
+                            <br>
+                            <small>Signed on: ${new Date(data.agreement.SignedDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</small>
+                        </div>
+                        ${data.agreement.CustomerSignature ? `
+                            <div style="text-align: center; margin-top: 15px;">
+                                <p style="font-weight: 600; margin-bottom: 10px;">Your Signature:</p>
+                                <img src="${data.agreement.CustomerSignature}" alt="Your Signature" style="max-width: 300px; border: 1px solid #ddd; padding: 10px; border-radius: 8px; background: white;">
+                            </div>
+                        ` : ''}
+                    `;
+                }
+            }
+        })
+        .catch(error => console.error('Error checking status:', error));
+}
+
+function isCanvasEmpty(canvas) {
+    const blank = document.createElement('canvas');
+    blank.width = canvas.width;
+    blank.height = canvas.height;
+    return canvas.toDataURL() === blank.toDataURL();
+}
+
+function submitSignature() {
+    if (!signatureCanvas) {
+        alert('Signature canvas not initialized');
+        return;
+    }
+    
+    if (isCanvasEmpty(signatureCanvas)) {
+        alert('Please draw your signature first');
+        return;
+    }
+
+    const submitBtn = event.target;
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Submitting...';
+    submitBtn.disabled = true;
+
+    const signatureBase64 = signatureCanvas.toDataURL('image/png');
+
+    fetch('./web/api/agreements/index.php?action=save_signature', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            booking_id: currentBookingID,
+            client_id: currentClientID,
+            signature: signatureBase64
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // ✅ Show success notification
+            showSuccessNotification();
+            
+            // Close modal after 2 seconds
+            setTimeout(() => {
+                const modal = bootstrap.Modal.getInstance(document.getElementById('agreementModal'));
+                modal.hide();
+                location.reload();
+            }, 2000);
+        } else {
+            alert('Error: ' + data.message);
         }
+    })
+    .catch(error => {
+        console.error('Error submitting signature:', error);
+        alert('Error submitting signature. Please try again.');
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    });
+}
+
+// Add this function:
+function showSuccessNotification() {
+    const notification = document.createElement('div');
+    notification.className = 'alert alert-success alert-dismissible fade show';
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        min-width: 350px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        animation: slideIn 0.3s ease-out;
+    `;
+    
+    notification.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <i class="bi bi-check-circle-fill" style="font-size: 1.5rem;"></i>
+            <div>
+                <strong>✓ Agreement Signed Successfully!</strong>
+                <p class="mb-0 small">Your signature has been recorded. Your booking is now confirmed.</p>
+            </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+        notification.remove();
+    }, 5000);
+}
     </script>
 </body>
 </html>

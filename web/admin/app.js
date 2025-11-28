@@ -1502,42 +1502,238 @@ async function loadBookingsData() {
     }
 }
 
+// Complete Fixed Bookings Display Function with Agreement Integration
+
 function displayBookings(bookings) {
     const tbody = document.getElementById('bookingsTable');
     
+    if (!tbody) {
+        console.error('Bookings table body not found');
+        return;
+    }
+    
     if (!bookings || bookings.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">No bookings found</td></tr>';
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="10" class="text-center text-muted py-4">
+                    <i class="bi bi-inbox" style="font-size: 2rem; opacity: 0.5;"></i>
+                    <p class="mb-0 mt-2">No bookings found</p>
+                </td>
+            </tr>
+        `;
         return;
     }
 
     tbody.innerHTML = bookings.map(booking => {
+        // Determine status badge color
+        let statusBadgeClass = 'bg-secondary';
+        switch(booking.Status?.toLowerCase()) {
+            case 'pending':
+                statusBadgeClass = 'bg-warning text-dark';
+                break;
+            case 'confirmed':
+                statusBadgeClass = 'bg-success';
+                break;
+            case 'completed':
+                statusBadgeClass = 'bg-info';
+                break;
+            case 'cancelled':
+                statusBadgeClass = 'bg-danger';
+                break;
+        }
+        
         // Determine payment status badge color
         let paymentBadgeClass = 'bg-secondary';
-        if (booking.PaymentStatus === 'Pending Payment') paymentBadgeClass = 'bg-warning';
-        else if (booking.PaymentStatus === 'Processing') paymentBadgeClass = 'bg-info';
-        else if (booking.PaymentStatus === 'Paid') paymentBadgeClass = 'bg-success';
-        else if (booking.PaymentStatus === 'Failed') paymentBadgeClass = 'bg-danger';
+        let paymentIcon = 'bi-clock';
+        
+        switch(booking.PaymentStatus) {
+            case 'Pending Payment':
+                paymentBadgeClass = 'bg-warning text-dark';
+                paymentIcon = 'bi-clock';
+                break;
+            case 'Processing':
+                paymentBadgeClass = 'bg-info';
+                paymentIcon = 'bi-hourglass-split';
+                break;
+            case 'Paid':
+                paymentBadgeClass = 'bg-success';
+                paymentIcon = 'bi-check-circle';
+                break;
+            case 'Failed':
+                paymentBadgeClass = 'bg-danger';
+                paymentIcon = 'bi-x-circle';
+                break;
+        }
+        
+        // Check if agreement can be viewed (only for Confirmed/Paid bookings)
+        const canViewAgreement = booking.Status === 'Confirmed' && booking.PaymentStatus === 'Paid';
         
         return `
-        <tr>
-            <td>#${booking.BookingID}</td>
-            <td>${booking.ClientName || 'N/A'}</td>
-            <td>${booking.EventType}</td>
-            <td>${booking.EventDate}</td>
-            <td>${booking.NumberOfGuests}</td>
-            <td><span class="badge badge-${booking.Status.toLowerCase()}">${booking.Status}</span></td>
-            <td><span class="badge ${paymentBadgeClass}">${booking.PaymentStatus || 'Pending Payment'}</span></td>
-            <td>₱${parseFloat(booking.TotalAmount || 0).toLocaleString()}</td>
+        <tr data-booking-id="${booking.BookingID}" style="transition: background-color 0.3s;">
+            <td class="fw-bold">#${booking.BookingID}</td>
             <td>
-                <button class="btn btn-sm btn-outline-dark" onclick="viewBookingDetails(${booking.BookingID})" title="View Details"><i class="bi bi-eye"></i></button>
-                <button class="btn btn-sm btn-outline-dark" onclick="editBookingDetails(${booking.BookingID})" title="Edit Booking"><i class="bi bi-pencil"></i></button>
-                ${booking.PaymentStatus === 'Paid' ? `<button class="btn btn-sm btn-outline-info" onclick="viewAgreement(${booking.BookingID})" title="View Agreement"><i class="bi bi-file-earmark-pdf"></i></button>` : ''}
+                <div style="max-width: 150px;">
+                    <div class="fw-semibold">${escapeHtml(booking.ClientName) || 'N/A'}</div>
+                    ${booking.ContactNumber ? `<small class="text-muted">${escapeHtml(booking.ContactNumber)}</small>` : ''}
+                </div>
+            </td>
+            <td>
+                <span class="badge bg-light text-dark border">
+                    ${escapeHtml(booking.EventType)}
+                </span>
+            </td>
+            <td>
+                <div>
+                    <i class="bi bi-calendar me-1"></i>
+                    ${formatDate(booking.EventDate)}
+                </div>
+            </td>
+            <td class="text-center">
+                <span class="badge bg-primary">${parseInt(booking.NumberOfGuests || 0).toLocaleString()}</span>
+            </td>
+            <td>
+                <span class="badge ${statusBadgeClass} px-3 py-2">
+                    ${escapeHtml(booking.Status)}
+                </span>
+            </td>
+            <td>
+                <span class="badge ${paymentBadgeClass} px-3 py-2">
+                    <i class="bi ${paymentIcon} me-1"></i>
+                    ${escapeHtml(booking.PaymentStatus || 'Pending Payment')}
+                </span>
+            </td>
+            <td class="fw-bold">₱${parseFloat(booking.TotalAmount || 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}</td>
+            <td>
+                <div class="btn-group" role="group">
+                    <button class="btn btn-sm btn-outline-dark" 
+                            onclick="viewBookingDetails(${booking.BookingID})" 
+                            title="View Details"
+                            style="border-radius: 4px 0 0 4px;">
+                        <i class="bi bi-eye"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-dark" 
+                            onclick="editBookingDetails(${booking.BookingID})" 
+                            title="Edit Booking"
+                            style="border-radius: 0;">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    ${canViewAgreement ? `
+                        <button class="btn btn-sm btn-outline-success" 
+                                onclick="viewAgreement(${booking.BookingID})" 
+                                title="View Signed Agreement"
+                                style="border-radius: 0 4px 4px 0;">
+                            <i class="bi bi-file-earmark-pdf"></i>
+                        </button>
+                    ` : `
+                        <button class="btn btn-sm btn-outline-secondary" 
+                                disabled
+                                title="Agreement not available"
+                                style="border-radius: 0 4px 4px 0;">
+                            <i class="bi bi-file-earmark"></i>
+                        </button>
+                    `}
+                </div>
             </td>
         </tr>
         `;
     }).join('');
 }
 
+// Format date helper
+function formatDate(dateString) {
+    if (!dateString) return 'N/A';
+    
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+    });
+}
+
+// Escape HTML helper
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Update the loadBookings function to use this display function
+function loadBookings(filters = {}) {
+    const tbody = document.getElementById('bookingsTable');
+    
+    if (!tbody) {
+        console.error('Bookings table not found');
+        return;
+    }
+    
+    // Show loading state
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="10" class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2 mb-0 text-muted">Loading bookings...</p>
+            </td>
+        </tr>
+    `;
+    
+    // Build query string from filters
+    const queryParams = new URLSearchParams();
+    if (filters.status) queryParams.append('status', filters.status);
+    if (filters.search) queryParams.append('search', filters.search);
+    if (filters.date_from) queryParams.append('date_from', filters.date_from);
+    if (filters.date_to) queryParams.append('date_to', filters.date_to);
+    
+    const queryString = queryParams.toString();
+    const url = API_BASE + 'bookings/index.php' + (queryString ? '?' + queryString : '');
+    
+    fetch(url, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Bookings API Response:', data);
+        
+        if (data.success && data.data && data.data.bookings) {
+            displayBookings(data.data.bookings);
+        } else {
+            throw new Error(data.message || 'Failed to load bookings');
+        }
+    })
+    .catch(error => {
+        console.error('Error loading bookings:', error);
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="10" class="text-center text-danger py-4">
+                    <i class="bi bi-exclamation-triangle" style="font-size: 2rem;"></i>
+                    <p class="mb-0 mt-2">Failed to load bookings</p>
+                    <small>${error.message}</small>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+// Initialize bookings on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Load bookings if on bookings page
+    if (document.getElementById('bookingsTable')) {
+        loadBookings();
+    }
+});
 function filterBookings() {
     const searchTerm = document.getElementById('searchBookings').value.toLowerCase();
     const statusFilter = document.getElementById('filterStatus').value;
@@ -2707,11 +2903,335 @@ function loadReportsCharts() {
     }
 }
 
-// ===== NOTIFICATIONS =====
+// Replace the loadNotifications function with:
+
+// Complete Fixed Notifications System for Admin Dashboard
+// Load and display notifications
 function loadNotifications() {
     const list = document.getElementById('notificationsList');
-    list.innerHTML = '<div class="list-group-item text-center text-muted">No new notifications</div>';
+    const badge = document.getElementById('notificationBadge');
+    
+    if (!list) {
+        console.error('Notifications list element not found');
+        return;
+    }
+    
+    // Show loading state
+    list.innerHTML = '<div class="list-group-item text-center text-muted py-3"><i class="bi bi-hourglass-split"></i> Loading...</div>';
+    
+    fetch(API_BASE + 'notifications/index.php', {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => {
+        console.log('Notifications API Status:', response.status);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Notifications API Response:', data);
+        
+        if (data.success && data.data && data.data.notifications) {
+            const notifications = data.data.notifications;
+            const unreadCount = data.data.unread || 0;
+            
+            // Update badge
+            if (badge) {
+                if (unreadCount > 0) {
+                    badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+                    badge.style.display = 'inline-block';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+            
+            if (notifications.length > 0) {
+                list.innerHTML = notifications.map(notif => {
+                    return createNotificationHTML(notif);
+                }).join('');
+            } else {
+                list.innerHTML = `
+                    <div class="list-group-item text-center text-muted py-4">
+                        <i class="bi bi-inbox" style="font-size: 2rem; opacity: 0.5;"></i>
+                        <p class="mb-0 mt-2">No notifications</p>
+                    </div>
+                `;
+            }
+        } else {
+            throw new Error(data.message || 'Failed to load notifications');
+        }
+    })
+    .catch(error => {
+        console.error('Error loading notifications:', error);
+        list.innerHTML = `
+            <div class="list-group-item text-center text-danger py-4">
+                <i class="bi bi-exclamation-triangle"></i> 
+                <p class="mb-0">Failed to load notifications</p>
+                <small>${error.message}</small>
+            </div>
+        `;
+    });
 }
+
+// Create notification HTML
+function createNotificationHTML(notif) {
+    let icon = 'bi-bell';
+    let bgColor = 'info';
+    let iconColor = '#0dcaf0';
+    
+    // Determine icon and color based on notification type
+    switch(notif.Type) {
+        case 'agreement_signed':
+            icon = 'bi-file-earmark-check';
+            bgColor = 'success';
+            iconColor = '#198754';
+            break;
+        case 'payment_received':
+        case 'payment_confirmed':
+            icon = 'bi-check-circle';
+            bgColor = 'success';
+            iconColor = '#198754';
+            break;
+        case 'booking_confirmed':
+            icon = 'bi-calendar-check';
+            bgColor = 'success';
+            iconColor = '#198754';
+            break;
+        case 'payment_pending':
+        case 'payment_processing':
+            icon = 'bi-clock';
+            bgColor = 'warning';
+            iconColor = '#ffc107';
+            break;
+        case 'booking_cancelled':
+            icon = 'bi-x-circle';
+            bgColor = 'danger';
+            iconColor = '#dc3545';
+            break;
+        case 'new_booking':
+            icon = 'bi-calendar-plus';
+            bgColor = 'primary';
+            iconColor = '#0d6efd';
+            break;
+    }
+    
+    const createdTime = new Date(notif.CreatedAt);
+    const timeAgo = getTimeAgo(createdTime);
+    const isUnread = parseInt(notif.IsRead) === 0;
+    
+    return `
+        <div class="list-group-item ${isUnread ? 'bg-light border-start border-4 border-' + bgColor : ''}" 
+             style="cursor: pointer; transition: all 0.3s; padding: 12px 16px;" 
+             onmouseover="this.style.backgroundColor='#f8f9fa';" 
+             onmouseout="this.style.backgroundColor='${isUnread ? '#f8f9fa' : 'white'}';"
+             onclick="handleNotificationClick(${notif.NotificationID}, ${notif.BookingID || 'null'}, '${notif.Type}')">
+            <div class="d-flex justify-content-between align-items-start">
+                <div class="d-flex gap-3" style="flex: 1;">
+                    <div style="font-size: 1.5rem; flex-shrink: 0; color: ${iconColor};">
+                        <i class="bi ${icon}"></i>
+                    </div>
+                    <div style="min-width: 0; flex: 1;">
+                        <h6 class="mb-1 fw-bold" style="word-break: break-word; font-size: 0.95rem;">
+                            ${escapeHtml(notif.Message)}
+                        </h6>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <small class="text-muted">
+                                <i class="bi bi-clock me-1"></i>${timeAgo}
+                            </small>
+                            ${notif.BookingID ? `
+                                <small class="text-muted">
+                                    <i class="bi bi-receipt me-1"></i>Booking #${notif.BookingID}
+                                </small>
+                            ` : ''}
+                            ${notif.FirstName ? `
+                                <small class="text-muted">
+                                    <i class="bi bi-person me-1"></i>${escapeHtml(notif.FirstName + ' ' + notif.LastName)}
+                                </small>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+                ${isUnread ? `<span class="badge bg-${bgColor} rounded-pill ms-2" style="flex-shrink: 0; font-size: 0.7rem;">New</span>` : ''}
+            </div>
+        </div>
+    `;
+}
+
+// Escape HTML to prevent XSS
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Format time ago
+function getTimeAgo(date) {
+    const seconds = Math.floor((new Date() - date) / 1000);
+    
+    if (seconds < 60) return 'just now';
+    if (seconds < 3600) {
+        const mins = Math.floor(seconds / 60);
+        return `${mins} minute${mins > 1 ? 's' : ''} ago`;
+    }
+    if (seconds < 86400) {
+        const hours = Math.floor(seconds / 3600);
+        return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    }
+    if (seconds < 604800) {
+        const days = Math.floor(seconds / 86400);
+        return `${days} day${days > 1 ? 's' : ''} ago`;
+    }
+    
+    return date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric',
+        year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
+    });
+}
+
+// Handle notification click
+function handleNotificationClick(notificationID, bookingID, type) {
+    console.log('Notification clicked:', { notificationID, bookingID, type });
+    
+    // Mark as read first
+    fetch(API_BASE + 'notifications/index.php', {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({ notification_id: notificationID })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Mark as read response:', data);
+        // Refresh notifications to update UI
+        loadNotifications();
+    })
+    .catch(error => console.error('Error marking as read:', error));
+    
+    // Navigate based on notification type
+    if (type === 'agreement_signed' && bookingID) {
+        // Open agreement modal directly
+        loadPage('bookings');
+        setTimeout(() => {
+            viewAgreement(bookingID);
+        }, 500);
+    } else if (bookingID) {
+        // Navigate to bookings and highlight the row
+        loadPage('bookings');
+        setTimeout(() => {
+            highlightBooking(bookingID);
+        }, 500);
+    }
+}
+
+// Highlight booking row
+function highlightBooking(bookingID) {
+    // Try to find the booking row
+    const bookingRow = document.querySelector(`tr[data-booking-id="${bookingID}"]`);
+    
+    if (bookingRow) {
+        // Scroll to row
+        bookingRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // Highlight with animation
+        bookingRow.style.transition = 'background-color 0.3s';
+        bookingRow.style.backgroundColor = '#fff3cd';
+        
+        // Remove highlight after 3 seconds
+        setTimeout(() => {
+            bookingRow.style.backgroundColor = '';
+        }, 3000);
+    } else {
+        console.log('Booking row not found for ID:', bookingID);
+    }
+}
+
+// Mark all notifications as read
+function markAllNotificationsRead() {
+    fetch(API_BASE + 'notifications/index.php', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({ mark_all_read: true })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            loadNotifications(); // Refresh
+            showToast('All notifications marked as read', 'success');
+        }
+    })
+    .catch(error => console.error('Error marking all as read:', error));
+}
+
+// Show toast notification
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type} alert-dismissible fade show`;
+    toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        min-width: 300px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    `;
+    toast.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.remove();
+    }, 3000);
+}
+
+// Auto-refresh notifications every 30 seconds
+let notificationInterval = null;
+
+function startNotificationPolling() {
+    if (notificationInterval) {
+        clearInterval(notificationInterval);
+    }
+    notificationInterval = setInterval(loadNotifications, 30000);
+}
+
+function stopNotificationPolling() {
+    if (notificationInterval) {
+        clearInterval(notificationInterval);
+        notificationInterval = null;
+    }
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Initializing notifications...');
+    loadNotifications();
+    startNotificationPolling();
+});
+
+// Clean up on page unload
+window.addEventListener('beforeunload', function() {
+    stopNotificationPolling();
+});
+
+// Auto-refresh notifications every 10 seconds
+setInterval(loadNotifications, 10000);
 
 // ===== ACTION FUNCTIONS =====
 // View booking details - READ ONLY MODE
@@ -4133,7 +4653,10 @@ function getAuthToken() {
     return sessionStorage.getItem('auth_token') || localStorage.getItem('auth_token') || '';
 }
 
-// ===== AGREEMENT MANAGEMENT =====
+// Replace the viewAgreement function in app.js with this fixed version:
+
+// Replace the viewAgreement function in app.js with this improved version:
+
 function viewAgreement(bookingID) {
     // Create modal if doesn't exist
     let modal = document.getElementById('adminAgreementModal');
@@ -4142,87 +4665,248 @@ function viewAgreement(bookingID) {
         modal = document.getElementById('adminAgreementModal');
     }
 
-    // Load agreement data
-    fetch(`../api/agreements/index.php?action=admin_get_agreement&booking_id=${bookingID}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success && data.agreement) {
-                const agreement = data.agreement;
-                
-                // Display agreement preview
-                if (agreement.ContractFile) {
-                    try {
-                        const html = atob(agreement.ContractFile);
-                        document.getElementById('adminAgreementPreview').innerHTML = html;
-                    } catch (e) {
-                        document.getElementById('adminAgreementPreview').innerHTML = '<p class="text-danger">Error loading agreement preview</p>';
+    const apiUrl = API_BASE + 'agreements/index.php?action=admin_get_agreement&booking_id=' + bookingID;
+    console.log('Loading agreement from:', apiUrl);
+    
+    // Show loading state
+    document.getElementById('adminAgreementPreview').innerHTML = `
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Loading agreement...</p>
+        </div>
+    `;
+    document.getElementById('adminSignatureSection').innerHTML = '';
+    
+    fetch(apiUrl, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => {
+        console.log('Agreement API Response Status:', response.status);
+        return response.json().then(data => ({
+            status: response.status,
+            data: data
+        }));
+    })
+    .then(({status, data}) => {
+        console.log('Agreement data:', data);
+        
+        if (data.success && data.data && data.data.agreement) {
+            const agreement = data.data.agreement;
+            
+            // Display agreement preview
+            if (agreement.ContractFile) {
+                try {
+                    let html = agreement.ContractFile;
+                    
+                    // Check if it's base64 encoded
+                    if (html.startsWith('PH') || html.match(/^[A-Za-z0-9+/=]+$/)) {
+                        html = atob(html);
                     }
-                }
-
-                // Show signature if signed
-                if (agreement.Status === 'signed' && agreement.CustomerSignature) {
-                    document.getElementById('adminSignatureSection').innerHTML = `
-                        <div style="margin-top: 20px; border-top: 2px solid #ddd; padding-top: 20px;">
-                            <h6 style="font-weight: 600; margin-bottom: 15px;">
-                                <i class="bi bi-check-circle me-2"></i>Customer Signature
-                            </h6>
-                            <p style="color: #666; font-size: 0.85rem; margin-bottom: 10px;">
-                                <strong>Signed on:</strong> ${new Date(agreement.SignedDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-                            </p>
-                            <div style="border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #f9f9f9; text-align: center;">
-                                <img src="${agreement.CustomerSignature}" alt="Customer Signature" style="max-width: 300px; max-height: 100px; object-fit: contain;">
-                            </div>
-                        </div>
-                    `;
-                } else {
-                    document.getElementById('adminSignatureSection').innerHTML = `
-                        <div class="alert alert-warning" style="margin-top: 20px;">
-                            <i class="bi bi-clock me-2"></i>
-                            <strong>Not Yet Signed</strong>
-                            <br>
-                            <small>Awaiting customer signature...</small>
+                    
+                    document.getElementById('adminAgreementPreview').innerHTML = html;
+                } catch (e) {
+                    console.error('Error decoding agreement:', e);
+                    document.getElementById('adminAgreementPreview').innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            <strong>Error loading agreement preview</strong>
+                            <br><small>${e.message}</small>
                         </div>
                     `;
                 }
-
-                // Update button visibility
-                if (agreement.Status === 'signed') {
-                    document.getElementById('printAgreementBtn').style.display = 'block';
-                    document.getElementById('downloadAgreementBtn').style.display = 'block';
-                } else {
-                    document.getElementById('printAgreementBtn').style.display = 'none';
-                    document.getElementById('downloadAgreementBtn').style.display = 'none';
-                }
-
-                // Store booking ID for print/download
-                document.getElementById('adminAgreementModal').dataset.bookingId = bookingID;
-
             } else {
-                document.getElementById('adminAgreementPreview').innerHTML = '<p class="text-warning">Agreement not found or not yet created.</p>';
-                document.getElementById('adminSignatureSection').innerHTML = '';
+                document.getElementById('adminAgreementPreview').innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>No contract file available</strong>
+                        <br><small>The agreement has not been generated yet.</small>
+                    </div>
+                `;
             }
-        })
-        .catch(error => {
-            console.error('Error loading agreement:', error);
-            document.getElementById('adminAgreementPreview').innerHTML = '<p class="text-danger">Error loading agreement</p>';
-        });
+
+            // Show signature if signed
+            if (agreement.Status === 'signed' && agreement.CustomerSignature) {
+                const signedDate = new Date(agreement.SignedDate);
+                document.getElementById('adminSignatureSection').innerHTML = `
+                    <div style="margin-top: 20px; border-top: 2px solid #ddd; padding-top: 20px;">
+                        <div class="alert alert-success mb-3">
+                            <i class="bi bi-check-circle-fill me-2"></i>
+                            <strong>✓ Agreement Signed Successfully</strong>
+                        </div>
+                        <h6 style="font-weight: 600; margin-bottom: 15px;">
+                            <i class="bi bi-pen me-2"></i>Customer Signature
+                        </h6>
+                        <p style="color: #666; font-size: 0.85rem; margin-bottom: 10px;">
+                            <strong>Signed on:</strong> ${signedDate.toLocaleDateString('en-US', { 
+                                year: 'numeric', 
+                                month: 'long', 
+                                day: 'numeric', 
+                                hour: '2-digit', 
+                                minute: '2-digit' 
+                            })}
+                        </p>
+                        <div style="border: 1px solid #28a745; border-radius: 8px; padding: 15px; background: #f0f8f4; text-align: center;">
+                            <img src="${agreement.CustomerSignature}" 
+                                 alt="Customer Signature" 
+                                 style="max-width: 300px; max-height: 120px; object-fit: contain;">
+                            <p class="text-muted small mt-2 mb-0">Customer Signature</p>
+                        </div>
+                    </div>
+                `;
+                
+                document.getElementById('printAgreementBtn').style.display = 'inline-block';
+                document.getElementById('downloadAgreementBtn').style.display = 'inline-block';
+            } else if (agreement.Status === 'unsigned' || !agreement.Status) {
+                document.getElementById('adminSignatureSection').innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="bi bi-clock me-2"></i>
+                        <strong>Not Yet Signed</strong>
+                        <br>
+                        <small>Awaiting customer signature...</small>
+                    </div>
+                `;
+                document.getElementById('printAgreementBtn').style.display = 'none';
+                document.getElementById('downloadAgreementBtn').style.display = 'none';
+            }
+
+            document.getElementById('adminAgreementModal').dataset.bookingId = bookingID;
+            document.getElementById('adminAgreementModal').dataset.agreementId = agreement.AgreementID;
+
+        } else if (!data.success && data.data && data.data.booking_exists) {
+            // Agreement doesn't exist yet, but booking does
+            const bookingInfo = data.data;
+            
+            let message = `
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>Agreement Not Created Yet</strong>
+                    <br>
+                    <p class="mt-2 mb-0">The agreement for Booking #${bookingID} has not been created yet.</p>
+                </div>
+                <div class="card mt-3">
+                    <div class="card-body">
+                        <h6 class="mb-3">Booking Information:</h6>
+                        <p><strong>Booking ID:</strong> #${bookingInfo.booking_id}</p>
+                        <p><strong>Booking Status:</strong> <span class="badge bg-info">${bookingInfo.booking_status}</span></p>
+                        <p><strong>Payment Status:</strong> <span class="badge bg-warning">${bookingInfo.payment_status}</span></p>
+            `;
+            
+            if (bookingInfo.can_create_agreement) {
+                message += `
+                    <div class="alert alert-success mt-3">
+                        <i class="bi bi-check-circle me-2"></i>
+                        This booking is ready for agreement creation (Confirmed & Paid).
+                    </div>
+                    <button class="btn btn-primary btn-sm" onclick="createAgreementForBooking(${bookingID})">
+                        <i class="bi bi-plus-circle me-1"></i>Create Agreement Now
+                    </button>
+                `;
+            } else {
+                message += `
+                    <div class="alert alert-warning mt-3">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Agreement can only be created when booking is Confirmed and Paid.
+                    </div>
+                `;
+            }
+            
+            message += `</div></div>`;
+            
+            document.getElementById('adminAgreementPreview').innerHTML = message;
+            document.getElementById('adminSignatureSection').innerHTML = '';
+            document.getElementById('printAgreementBtn').style.display = 'none';
+            document.getElementById('downloadAgreementBtn').style.display = 'none';
+            
+        } else {
+            const errorMsg = data.message || 'Agreement not found or not yet created';
+            document.getElementById('adminAgreementPreview').innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Agreement Not Available</strong>
+                    <br><small>${errorMsg}</small>
+                    <br><br>
+                    <small class="text-muted">Booking ID: ${bookingID}</small>
+                </div>
+            `;
+            document.getElementById('adminSignatureSection').innerHTML = '';
+            document.getElementById('printAgreementBtn').style.display = 'none';
+            document.getElementById('downloadAgreementBtn').style.display = 'none';
+        }
+    })
+    .catch(error => {
+        console.error('Error loading agreement:', error);
+        document.getElementById('adminAgreementPreview').innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-circle me-2"></i>
+                <strong>Error Loading Agreement</strong>
+                <br><small>${error.message}</small>
+                <br><small class="text-muted">API URL: ${apiUrl}</small>
+            </div>
+        `;
+        document.getElementById('adminSignatureSection').innerHTML = '';
+        document.getElementById('printAgreementBtn').style.display = 'none';
+        document.getElementById('downloadAgreementBtn').style.display = 'none';
+    });
 
     const bsModal = new bootstrap.Modal(modal);
     bsModal.show();
 }
 
+// Function to create agreement for a booking
+async function createAgreementForBooking(bookingID) {
+    if (!confirm('Create agreement for Booking #' + bookingID + '?')) return;
+    
+    try {
+        const response = await fetch(API_BASE + 'agreements/index.php?action=create_agreement', {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ booking_id: bookingID })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('success', 'Agreement created successfully!');
+            // Close current modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('adminAgreementModal'));
+            if (modal) modal.hide();
+            
+            // Reload and view the new agreement
+            setTimeout(() => {
+                viewAgreement(bookingID);
+            }, 500);
+        } else {
+            showToast('error', 'Error: ' + data.message);
+        }
+    } catch (error) {
+        console.error('Error creating agreement:', error);
+        showToast('error', 'Failed to create agreement: ' + error.message);
+    }
+}
+
 function createAdminAgreementModal() {
     const modalHTML = `
     <div class="modal fade" id="adminAgreementModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-centered">
-            <div class="modal-content" style="border-radius: 16px; border: none;">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content" style="border-radius: 16px; border: none; max-height: 90vh;">
                 <div class="modal-header" style="background: linear-gradient(135deg, #000000, #212529); color: white; border-radius: 16px 16px 0 0; padding: 20px 24px; border: none;">
                     <h5 class="modal-title">
                         <i class="bi bi-file-earmark-pdf me-2"></i>Agreement Details
                     </h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                <div class="modal-body" style="max-height: calc(90vh - 180px); overflow-y: auto; padding: 24px;">
                     <div id="adminAgreementPreview" style="background: white; padding: 20px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 20px; font-size: 0.9rem; line-height: 1.6;"></div>
                     <div id="adminSignatureSection"></div>
                 </div>
@@ -4253,8 +4937,17 @@ function printAgreement() {
         <head>
             <title>Catering Agreement</title>
             <style>
-                body { font-family: Arial, sans-serif; padding: 20px; }
-                @media print { body { margin: 0; padding: 10px; } }
+                body { 
+                    font-family: Arial, sans-serif; 
+                    padding: 20px;
+                    line-height: 1.6;
+                }
+                @media print { 
+                    body { 
+                        margin: 0; 
+                        padding: 10px; 
+                    } 
+                }
             </style>
         </head>
         <body>
@@ -4269,33 +4962,107 @@ function printAgreement() {
     }, 250);
 }
 
+// Replace the downloadAgreementPDF function with this FIXED version:
+
 function downloadAgreementPDF() {
     const bookingID = document.getElementById('adminAgreementModal').dataset.bookingId;
-    const agreementID = bookingID; // Using booking ID as reference
+    const agreementID = document.getElementById('adminAgreementModal').dataset.agreementId;
     
-    fetch(`../api/agreements/index.php?action=download_pdf&agreement_id=${agreementID}&client_id=0`)
-        .then(response => {
-            if (response.ok) {
-                return response.blob();
-            }
-            throw new Error('Download failed');
-        })
-        .then(blob => {
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `Agreement_Booking_${bookingID}.pdf`;
-            document.body.appendChild(link);
-            link.click();
+    if (!bookingID && !agreementID) {
+        showToast('error', 'No booking or agreement ID available');
+        return;
+    }
+    
+    console.log('Downloading PDF for:', { bookingID, agreementID });
+    
+    // Build URL with proper parameters
+    const params = new URLSearchParams();
+    params.append('action', 'download_pdf');
+    if (bookingID) params.append('booking_id', bookingID);
+    if (agreementID) params.append('agreement_id', agreementID);
+    
+    const downloadUrl = `${API_BASE}agreements/index.php?${params.toString()}`;
+    console.log('Download URL:', downloadUrl);
+    
+    // Show loading indicator
+    const downloadBtn = document.getElementById('downloadAgreementBtn');
+    const originalText = downloadBtn.innerHTML;
+    downloadBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Downloading...';
+    downloadBtn.disabled = true;
+    
+    fetch(downloadUrl, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => {
+        console.log('Response status:', response.status);
+        console.log('Response headers:', {
+            contentType: response.headers.get('content-type'),
+            contentDisposition: response.headers.get('content-disposition'),
+            contentLength: response.headers.get('content-length')
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const contentType = response.headers.get('content-type');
+        
+        // If it's JSON, there's an error
+        if (contentType && contentType.includes('application/json')) {
+            return response.json().then(data => {
+                throw new Error(data.message || 'Failed to download PDF');
+            });
+        }
+        
+        // If it's PDF, process it
+        if (contentType && contentType.includes('application/pdf')) {
+            return response.blob();
+        }
+        
+        throw new Error('Unexpected response type: ' + contentType);
+    })
+    .then(blob => {
+        console.log('Blob received, size:', blob.size);
+        
+        if (blob.size === 0) {
+            throw new Error('Received empty file');
+        }
+        
+        // Create download link
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Agreement_Booking_${bookingID || agreementID}.pdf`;
+        
+        // Trigger download
+        document.body.appendChild(link);
+        link.click();
+        
+        // Cleanup
+        setTimeout(() => {
             window.URL.revokeObjectURL(url);
             link.remove();
-        })
-        .catch(error => {
-            console.error('Error downloading PDF:', error);
-            alert('Error downloading PDF');
-        });
+        }, 100);
+        
+        showToast('success', 'Agreement downloaded successfully!');
+        
+        // Reset button
+        downloadBtn.innerHTML = originalText;
+        downloadBtn.disabled = false;
+    })
+    .catch(error => {
+        console.error('Download error:', error);
+        showToast('error', 'Error downloading PDF: ' + error.message);
+        
+        // Reset button
+        downloadBtn.innerHTML = originalText;
+        downloadBtn.disabled = false;
+    });
 }
-
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
     styleBookingRows();

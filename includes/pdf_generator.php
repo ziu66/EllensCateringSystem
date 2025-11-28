@@ -1,8 +1,9 @@
 <?php
 // PDF Generator for Agreements
-// Generates HTML that can be printed or converted to PDF
+// Place in: C:\xampp1\htdocs\EllensCateringSystem\includes\pdf_generator.php
 
-// Helper function to log to file for debugging
+require_once __DIR__ . '/signature_helper.php';
+
 function logPDF($message) {
     $logFile = __DIR__ . '/../pdf_debug.log';
     $timestamp = date('Y-m-d H:i:s');
@@ -13,140 +14,76 @@ function logPDF($message) {
 
 /**
  * Generate agreement PDF/HTML with booking details
- * Works with both PDO and MySQLi connections
  */
 function generateAgreementPDF($bookingID, $clientID, $conn) {
     try {
-        logPDF("Starting PDF generation for Booking $bookingID, Client $clientID");
+        // Fetch booking details
+        $stmt = $conn->prepare("
+            SELECT b.*, c.Name as ClientName, c.Email, c.ContactNumber, c.Address,
+                   q.EstimatedPrice, q.SpecialRequest, q.SpecialRequestItems
+            FROM booking b
+            JOIN client c ON b.ClientID = c.ClientID
+            LEFT JOIN quotation q ON b.BookingID = q.BookingID
+            WHERE b.BookingID = ? AND b.ClientID = ?
+        ");
         
-        $booking = null;
+        $stmt->bind_param("ii", $bookingID, $clientID);
+        $stmt->execute();
+        $result = $stmt->get_result();
         
-        // Check if it's PDO
-        if ($conn instanceof PDO) {
-            logPDF("Using PDO connection");
-            // PDO connection
-            $bookingStmt = $apiConn->prepare("
-                SELECT 
-                    b.BookingID,
-                    b.EventType,
-                    b.EventDate,
-                    b.EventLocation,
-                    b.NumberOfGuests,
-                    b.SpecialRequests,
-                    b.TotalAmount,
-                    c.Name as FirstName,
-                    '' as LastName,
-                    c.Email as EmailAddress
-                FROM booking b
-                JOIN client c ON b.ClientID = c.ClientID
-                WHERE b.BookingID = :bookingID AND b.ClientID = :clientID
-            ");
-            
-            $bookingStmt->execute([':bookingID' => $bookingID, ':clientID' => $clientID]);
-            $booking = $bookingStmt->fetch();
-        } else {
-            logPDF("Using MySQLi connection");
-            // MySQLi connection - use root database connection if api connection fails
-            $apiConn = $conn;
-            
-            // Try with the passed connection first
-            $bookingStmt = $apiConn->prepare("
-                SELECT 
-                    b.BookingID,
-                    b.EventType,
-                    b.EventDate,
-                    b.EventLocation,
-                    b.NumberOfGuests,
-                    b.SpecialRequests,
-                    b.TotalAmount,
-                    c.Name as FirstName,
-                    '' as LastName,
-                    c.Email as EmailAddress
-                FROM booking b
-                JOIN client c ON b.ClientID = c.ClientID
-                WHERE b.BookingID = ? AND b.ClientID = ?
-            ");
-            
-            if (!$bookingStmt) {
-                logPDF("prepare() failed with passed connection, trying getDB() fallback");
-                // Connection failed, try getDB() fallback
-                $apiConn = getDB();
-                $bookingStmt = $apiConn->prepare("
-                    SELECT 
-                        b.BookingID,
-                        b.EventType,
-                        b.EventDate,
-                        b.EventLocation,
-                        b.NumberOfGuests,
-                        b.SpecialRequests,
-                        b.TotalAmount,
-                        c.Name as FirstName,
-                        '' as LastName,
-                        c.Email as EmailAddress
-                    FROM booking b
-                    JOIN client c ON b.ClientID = c.ClientID
-                    WHERE b.BookingID = ? AND b.ClientID = ?
-                ");
-                
-                if (!$bookingStmt) {
-                    throw new Exception('Prepare failed with both connections: ' . $apiConn->error);
+        if ($result->num_rows === 0) {
+            error_log("No booking found for ID: $bookingID, Client: $clientID");
+            return false;
+        }
+        
+        $booking = $result->fetch_assoc();
+        $stmt->close();
+        
+        // Format dates
+        $eventDate = date('F d, Y', strtotime($booking['EventDate']));
+        $effectiveDate = date('F d, Y', strtotime($booking['EventDate']));
+        
+        // Parse special request items
+        $specialRequestItems = '';
+        if (!empty($booking['SpecialRequestItems'])) {
+            $items = json_decode($booking['SpecialRequestItems'], true);
+            if ($items) {
+                foreach ($items as $item) {
+                    $specialRequestItems .= "- " . htmlspecialchars($item['name']) . "\n";
                 }
             }
-            
-            $bookingStmt->bind_param("ii", $bookingID, $clientID);
-            if (!$bookingStmt->execute()) {
-                throw new Exception('Execute failed: ' . $bookingStmt->error);
-            }
-            
-            $result = $bookingStmt->get_result();
-            if (!$result) {
-                throw new Exception('Get result failed: ' . $apiConn->error);
-            }
-            
-            $booking = $result->fetch_assoc();
-            $bookingStmt->close();
         }
         
-        if (!$booking) {
-            logPDF("Booking not found for ID=$bookingID, ClientID=$clientID");
-            throw new Exception("Booking #$bookingID for client #$clientID not found");
-        }
+        // Clean special requests
+        $specialRequests = htmlspecialchars($booking['SpecialRequests'] ?? $booking['SpecialRequest'] ?? 'None');
         
-        logPDF("Found booking - {$booking['EventType']} on {$booking['EventDate']}");
+        // Get Elma's signature from database
+        $elmaSignature = getElmaSignature($conn);
         
-        // Generate HTML content for agreement
-        $html = generateAgreementHTML($booking);
+        // Generate HTML with signature
+        $html = generateAgreementHTML($booking, $eventDate, $effectiveDate, $specialRequests, $elmaSignature);
         
-        // Store HTML as base64 for PDF-like storage
-        $htmlBase64 = base64_encode($html);
+        // Encode to base64
+        $pdfBase64 = base64_encode($html);
         
-        if (empty($htmlBase64)) {
-            logPDF("HTML encoding resulted in empty base64");
-            throw new Exception('HTML encoding failed');
-        }
+        error_log("PDF generated successfully for booking $bookingID - Size: " . strlen($pdfBase64) . " bytes");
         
-        logPDF("Successfully created base64 PDF of " . strlen($htmlBase64) . " bytes");
-        return $htmlBase64;
+        return $pdfBase64;
         
     } catch (Exception $e) {
-        logPDF("ERROR: " . $e->getMessage());
+        error_log("PDF Generation Error: " . $e->getMessage());
         return false;
     }
 }
 
-/**
- * Generate HTML content for agreement based on booking details
- */
-function generateAgreementHTML($booking) {
-    $formattedDate = date('F d, Y', strtotime($booking['EventDate']));
-    $totalAmount = number_format($booking['TotalAmount'], 2);
-    $clientName = htmlspecialchars($booking['FirstName'] . ' ' . $booking['LastName']);
-    $eventLocation = htmlspecialchars($booking['EventLocation']);
+function generateAgreementHTML($booking, $eventDate, $effectiveDate, $specialRequests, $elmaSignature) {
+    $clientName = htmlspecialchars($booking['ClientName']);
     $eventType = htmlspecialchars($booking['EventType']);
-    $numberOfGuests = intval($booking['NumberOfGuests']);
-    $specialRequests = htmlspecialchars($booking['SpecialRequests'] ?? 'None');
+    $location = htmlspecialchars($booking['EventLocation']);
+    $guests = intval($booking['NumberOfGuests']);
+    $totalAmount = number_format($booking['TotalAmount'], 2);
     
-    $html = <<<EOD
+    return <<<HTML
 <!DOCTYPE html>
 <html>
 <head>
@@ -244,6 +181,15 @@ function generateAgreementHTML($booking) {
             border-bottom: 1px solid #000;
             height: 80px;
             margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .signature-image {
+            max-width: 200px;
+            max-height: 60px;
+            margin: 10px auto;
         }
         
         .signature-name {
@@ -274,14 +220,14 @@ function generateAgreementHTML($booking) {
     </div>
     
     <div class="content">
-        <p>This Catering Agreement (hereinafter referred to as the <strong>"Agreement"</strong>) is entered into on <strong>$formattedDate</strong>, (the <strong>"Effective date"</strong>), by and between <strong>$clientName</strong> (hereinafter referred to as a <strong>"Client"</strong>) and <strong>Elma M. Barcelon</strong>, with an address of <strong>Narra 1 st, Malaruhatan, Lian, Batangas</strong> (hereinafter referred to as the <strong>"Caterer"</strong>) collectively referred to as the <strong>"Parties"</strong>, both of whom agree to be bound by this agreement.</p>
+        <p>This Catering Agreement (hereinafter referred to as the <strong>"Agreement"</strong>) is entered into on <strong>$effectiveDate</strong>, (the <strong>"Effective date"</strong>), by and between <strong>$clientName </strong> (hereinafter referred to as a <strong>"Client"</strong>) and <strong>Elma M. Barcelon</strong>, with an address of <strong>Narra 1 st, Malaruhatan, Lian, Batangas</strong> (hereinafter referred to as the <strong>"Caterer"</strong>) collectively referred to as the <strong>"Parties"</strong>, both of whom agree to be bound by this agreement.</p>
         
         <p>The <strong>Caterer</strong> guarantees that all food will be prepared, stored, and served in compliance with all applicable health and safety regulations to prevent contamination or foodborne illness caused by the food provided. <strong>The Caterer agrees to assume full responsibility and indemnify the Client for any resulting medical cost or liabilities.</strong></p>
     </div>
     
     <div class="section-title">EVENT DATE AND LOCATION</div>
     <div class="section-content">
-        <p>The event will occur on <strong>$formattedDate</strong>. It will be located at <strong>$eventLocation</strong>.</p>
+        <p>The event will occur on <strong>$eventDate</strong>. It will be located at <strong>$location</strong>.</p>
     </div>
     
     <div class="section-title">EVENT DETAILS</div>
@@ -292,7 +238,7 @@ function generateAgreementHTML($booking) {
         </tr>
         <tr>
             <td>Number of Guests:</td>
-            <td>$numberOfGuests</td>
+            <td>$guests</td>
         </tr>
         <tr>
             <td>Special Requests:</td>
@@ -315,20 +261,18 @@ function generateAgreementHTML($booking) {
         <div class="signature-block">
             <div class="signature-line"></div>
             <div class="signature-name">CLIENT SIGNATURE</div>
-            <div class="signature-title">$clientName</div>
+            <div class="signature-title">$clientName </div>
         </div>
         <div class="signature-block">
-            <div class="signature-line"></div>
+            <div class="signature-line">
+                <img src="$elmaSignature" class="signature-image" alt="Elma Barcelon Signature">
+            </div>
             <div class="signature-name">ELMA BARCELON</div>
             <div class="signature-title">CATERER</div>
         </div>
     </div>
 </body>
 </html>
-EOD;
-
-    return $html;
+HTML;
 }
-
 ?>
-
