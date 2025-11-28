@@ -4710,6 +4710,55 @@ function viewAgreement(bookingID) {
                         html = atob(html);
                     }
                     
+                    // Always inject Ellen's signature if available (auto-populated from system_config)
+                    // Also inject customer signature if the agreement is signed
+                    if (agreement.CateringSignature || (agreement.Status === 'signed' && agreement.CustomerSignature)) {
+                        // Create a temporary container to parse and modify the HTML
+                        const temp = document.createElement('div');
+                        temp.innerHTML = html;
+                        
+                        console.log('Agreement status:', agreement.Status, 'CustomerSignature:', !!agreement.CustomerSignature, 'CateringSignature:', !!agreement.CateringSignature);
+                        
+                        // Inject customer signature if signed
+                        if (agreement.Status === 'signed' && agreement.CustomerSignature) {
+                            const clientSigPlaceholder = temp.querySelector('#client-signature-placeholder');
+                            if (clientSigPlaceholder) {
+                                const sigImg = document.createElement('img');
+                                sigImg.src = agreement.CustomerSignature;
+                                sigImg.style.maxWidth = '100%';
+                                sigImg.style.maxHeight = '40px';
+                                sigImg.style.width = 'auto';
+                                sigImg.style.height = 'auto';
+                                sigImg.style.objectFit = 'contain';
+                                sigImg.style.display = 'block';
+                                sigImg.style.margin = '0 auto';
+                                clientSigPlaceholder.innerHTML = '';
+                                clientSigPlaceholder.appendChild(sigImg);
+                            }
+                        }
+                        
+                        // Always inject catering signature if available
+                        if (agreement.CateringSignature) {
+                            console.log('Adding catering signature to admin view');
+                            const cateringSigPlaceholder = temp.querySelector('#catering-signature-placeholder');
+                            if (cateringSigPlaceholder) {
+                                const cateringSigImg = document.createElement('img');
+                                cateringSigImg.src = agreement.CateringSignature;
+                                cateringSigImg.style.maxWidth = '100%';
+                                cateringSigImg.style.maxHeight = '40px';
+                                cateringSigImg.style.width = 'auto';
+                                cateringSigImg.style.height = 'auto';
+                                cateringSigImg.style.objectFit = 'contain';
+                                cateringSigImg.style.display = 'block';
+                                cateringSigImg.style.margin = '0 auto';
+                                cateringSigPlaceholder.innerHTML = '';
+                                cateringSigPlaceholder.appendChild(cateringSigImg);
+                            }
+                        }
+                        
+                        html = temp.innerHTML;
+                    }
+                    
                     document.getElementById('adminAgreementPreview').innerHTML = html;
                 } catch (e) {
                     console.error('Error decoding agreement:', e);
@@ -4734,6 +4783,24 @@ function viewAgreement(bookingID) {
             // Show signature if signed
             if (agreement.Status === 'signed' && agreement.CustomerSignature) {
                 const signedDate = new Date(agreement.SignedDate);
+                let cateringSignatureHtml = '';
+                
+                if (agreement.CateringSignature) {
+                    cateringSignatureHtml = `
+                        <div style="margin-top: 15px;">
+                            <h6 style="font-weight: 600; margin-bottom: 15px;">
+                                <i class="bi bi-pen me-2"></i>Catering Representative Signature
+                            </h6>
+                            <div style="border: 1px solid #007bff; border-radius: 8px; padding: 15px; background: #f0f7ff; text-align: center;">
+                                <img src="${agreement.CateringSignature}" 
+                                     alt="Catering Signature" 
+                                     style="max-width: 300px; max-height: 120px; object-fit: contain;">
+                                <p class="text-muted small mt-2 mb-0">Ellen Barcelona - Catering Representative</p>
+                            </div>
+                        </div>
+                    `;
+                }
+                
                 document.getElementById('adminSignatureSection').innerHTML = `
                     <div style="margin-top: 20px; border-top: 2px solid #ddd; padding-top: 20px;">
                         <div class="alert alert-success mb-3">
@@ -4758,6 +4825,7 @@ function viewAgreement(bookingID) {
                                  style="max-width: 300px; max-height: 120px; object-fit: contain;">
                             <p class="text-muted small mt-2 mb-0">Customer Signature</p>
                         </div>
+                        ${cateringSignatureHtml}
                     </div>
                 `;
                 
@@ -5068,6 +5136,12 @@ document.addEventListener('DOMContentLoaded', function() {
     styleBookingRows();
     console.log('Booking management functions loaded');
 });
+
+// ============================================================
+// CATERING SIGNATURE FUNCTIONS
+// ============================================================
+
+
 
 // ============================================================
 // BOOKING MANAGEMENT FUNCTIONS - END

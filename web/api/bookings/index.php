@@ -144,16 +144,116 @@ function handleConfirmPayment($conn) {
             
             if ($stmtCheckAgreement->rowCount() === 0) {
                 // Agreement doesn't exist, create it
-                // DON'T try to generate PDF here - do it on-the-fly when needed
+                // First, get the booking details to generate contract
+                $bookingDetailsQuery = "
+                    SELECT b.BookingID, b.ClientID, b.EventType, b.EventDate, b.EventLocation, b.NumberOfGuests, b.TotalAmount,
+                           c.Name, c.Email, c.ContactNumber
+                    FROM booking b
+                    INNER JOIN client c ON b.ClientID = c.ClientID
+                    WHERE b.BookingID = :bookingID LIMIT 1
+                ";
+                $bookingStmt = $conn->prepare($bookingDetailsQuery);
+                $bookingStmt->execute([':bookingID' => $bookingDetail['BookingID']]);
+                $bookingData = $bookingStmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($bookingData) {
+                    // Generate contract HTML
+                    $contractDate = date('F d, Y');
+                    $eventDate = date('M d, Y', strtotime($bookingData['EventDate']));
+                    $totalAmount = number_format($bookingData['TotalAmount'], 2);
+                    $clientName = htmlspecialchars($bookingData['Name']);
+                    $clientEmail = htmlspecialchars($bookingData['Email']);
+                    $clientPhone = htmlspecialchars($bookingData['ContactNumber']);
+                    $eventType = htmlspecialchars($bookingData['EventType']);
+                    $eventLocation = htmlspecialchars($bookingData['EventLocation']);
+                    $numGuests = htmlspecialchars($bookingData['NumberOfGuests']);
+                    
+                    $contractHTML = <<<HTML
+                    <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; font-size: 13px; line-height: 1.4;">
+                        <div style="text-align: center; margin-bottom: 15px;">
+                            <h2 style="color: #000; margin: 0 0 5px 0; font-size: 18px;">CATERING SERVICE AGREEMENT</h2>
+                            <p style="color: #666; margin: 0; font-size: 11px;">Date: {$contractDate}</p>
+                        </div>
+                        
+                        <hr style="border: none; border-top: 1px solid #000; margin: 10px 0;">
+                        
+                        <div style="margin-bottom: 12px;">
+                            <p style="margin: 0 0 5px 0; font-weight: bold; font-size: 12px;">CLIENT: {$clientName} | EMAIL: {$clientEmail} | PHONE: {$clientPhone}</p>
+                        </div>
+                        
+                        <table style="width: 100%; margin-bottom: 12px; font-size: 12px;">
+                            <tr>
+                                <td style="padding: 3px; border: 1px solid #ccc;"><strong>Event Type:</strong> {$eventType}</td>
+                                <td style="padding: 3px; border: 1px solid #ccc;"><strong>Date:</strong> {$eventDate}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 3px; border: 1px solid #ccc;"><strong>Location:</strong> {$eventLocation}</td>
+                                <td style="padding: 3px; border: 1px solid #ccc;"><strong>Guests:</strong> {$numGuests} pax</td>
+                            </tr>
+                            <tr>
+                                <td colspan="2" style="padding: 3px; border: 1px solid #ccc; background: #f5f5f5; font-weight: bold; text-align: center;">TOTAL AMOUNT: PHP {$totalAmount}</td>
+                            </tr>
+                        </table>
+                        
+                        <div style="margin-bottom: 12px; font-size: 12px;">
+                            <p style="margin: 0 0 5px 0; font-weight: bold;">TERMS & CONDITIONS:</p>
+                            <ol style="margin: 0; padding-left: 20px; color: #333;">
+                                <li style="margin: 2px 0;">Payment must be completed before event date.</li>
+                                <li style="margin: 2px 0;">Cancellations require 7 days notice.</li>
+                                <li style="margin: 2px 0;">Menu items subject to availability.</li>
+                                <li style="margin: 2px 0;">Client provides accurate event information.</li>
+                                <li style="margin: 2px 0;">Additional services must be confirmed in writing.</li>
+                            </ol>
+                        </div>
+                        
+                        <div style="margin-top: 20px; padding-top: 15px;">
+                            <table style="width: 100%; font-size: 11px;">
+                                <tr>
+                                    <td style="width: 50%; text-align: center; padding: 0 10px;">
+                                        <div id="client-signature-placeholder" style="height: 50px; margin-bottom: 8px; display: flex; align-items: center; justify-content: center;"></div>
+                                        <div style="border-top: 2px solid #000; padding-top: 8px;">
+                                            <p style="margin: 2px 0 0 0; font-weight: bold;">Client Signature</p>
+                                            <p style="margin: 2px 0 0 0; color: #666; font-size: 10px;">{$clientName}</p>
+                                        </div>
+                                    </td>
+                                    <td style="width: 50%; text-align: center; padding: 0 10px;">
+                                        <div id="catering-signature-placeholder" style="height: 50px; margin-bottom: 8px; display: flex; align-items: center; justify-content: center;"></div>
+                                        <div style="border-top: 2px solid #000; padding-top: 8px;">
+                                            <p style="margin: 2px 0 0 0; font-weight: bold;">Catering Representative</p>
+                                            <p style="margin: 2px 0 0 0; color: #666; font-size: 10px;">Ellen Barcelona</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+HTML;
+                    
+                    $contractFileBase64 = base64_encode($contractHTML);
+                    
+                    // Get Ellen's signature from system_config
+                    $ellensSignature = null;
+                    $ellensSignatureQuery = "SELECT config_value FROM system_config WHERE config_key = 'elma_signature' LIMIT 1";
+                    $ellensSignatureStmt = $conn->prepare($ellensSignatureQuery);
+                    $ellensSignatureStmt->execute();
+                    $ellensSignatureRow = $ellensSignatureStmt->fetch(PDO::FETCH_ASSOC);
+                    if ($ellensSignatureRow) {
+                        $ellensSignature = $ellensSignatureRow['config_value'];
+                    }
+                }
+                
+                // Create agreement with contract and Ellen's signature
                 $createAgreementQuery = "INSERT INTO agreement 
-                                        (BookingID, ClientID, Status, CreatedAt, UpdatedAt) 
+                                        (BookingID, ClientID, ContractFile, CateringSignature, Status, CreatedAt, UpdatedAt) 
                                         VALUES 
-                                        (:bookingID, :clientID, 'unsigned', NOW(), NOW())";
+                                        (:bookingID, :clientID, :contractFile, :cateringSignature, 'unsigned', NOW(), NOW())";
                 
                 $stmtCreateAgreement = $conn->prepare($createAgreementQuery);
                 $stmtCreateAgreement->execute([
                     ':bookingID' => $bookingDetail['BookingID'],
-                    ':clientID' => $bookingDetail['ClientID']
+                    ':clientID' => $bookingDetail['ClientID'],
+                    ':contractFile' => $contractFileBase64 ?? null,
+                    ':cateringSignature' => $ellensSignature ?? null
                 ]);
             }
             

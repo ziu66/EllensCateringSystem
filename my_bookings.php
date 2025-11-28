@@ -1008,6 +1008,51 @@ $stmt->close();
         <?php endif; ?>
     </div>
 
+    <!-- GCash QR Code Modal -->
+    <div id="gcashModal" class="gcash-modal" style="display: none;">
+        <div class="gcash-modal-content">
+            <span class="close-modal" onclick="closeGCashModal()">&times;</span>
+            <div class="gcash-logo">
+                <i class="bi bi-qr-code"></i>
+            </div>
+            <h2 style="color: var(--primary-dark); font-weight: 700; margin-bottom: 8px; font-size: 1.5rem;">GCash Payment</h2>
+            <p style="color: var(--medium-gray); margin-bottom: 15px; font-size: 0.95rem;">Scan the QR code below with your GCash app</p>
+            
+            <div style="background: #f0f8ff; padding: 12px; border-radius: 10px; margin: 15px 0; font-size: 0.9rem;">
+                <p style="margin: 0; color: var(--text-dark); font-weight: 600;">
+                    <i class="bi bi-receipt me-2"></i>Booking ID: #<span id="gcashBookingId"></span>
+                </p>
+                <p style="margin: 8px 0 0 0; color: var(--text-dark); font-weight: 600;">
+                    <i class="bi bi-cash-coin me-2"></i>Amount: ₱<span id="gcashAmount">0.00</span>
+                </p>
+            </div>
+            
+            <div class="qr-code-container">
+                <img id="gcashQRCode" src="gcash_qr.jpg" alt="GCash QR Code">
+            </div>
+            
+            <div style="margin: 15px 0;">
+                <label style="display: block; margin-bottom: 8px; color: var(--text-dark); font-weight: 600; font-size: 0.95rem;">
+                    <i class="bi bi-key me-1"></i>GCash Reference Number <span style="color: red;">*</span>
+                </label>
+                <input type="text" id="gcashRefNumber" placeholder="Enter your GCash reference number" 
+                       style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem;" maxlength="50">
+                <small style="color: #666; display: block; margin-top: 5px;">
+                    <i class="bi bi-info-circle me-1"></i>The reference appears in your GCash app after payment
+                </small>
+            </div>
+            
+            <p style="color: var(--medium-gray); font-size: 0.85rem; margin-bottom: 15px;">
+                <i class="bi bi-shield-check me-1"></i>
+                Keep your reference number for verification.
+            </p>
+            
+            <button onclick="completeGCashPayment()" type="button" style="background: #007dfe; color: white; border: none; padding: 10px 25px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.95rem; width: 100%;">
+                <i class="bi bi-check-circle me-2"></i>Save Reference Number
+            </button>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
@@ -1918,10 +1963,37 @@ function openAgreementModal(bookingID, clientID, eventDate) {
 
     // Initialize after modal is shown
     modal.addEventListener('shown.bs.modal', function() {
-        initSignatureCanvas();
-        loadAgreementPreview(bookingID, clientID);
-        checkAgreementStatus(bookingID, clientID);
+        // First, try to create the agreement if it doesn't exist
+        createAgreementIfNeeded(bookingID, clientID, function() {
+            initSignatureCanvas();
+            loadAgreementPreview(bookingID, clientID);
+            checkAgreementStatus(bookingID, clientID);
+        });
     }, { once: true });
+}
+
+// New function to create agreement if it doesn't exist
+function createAgreementIfNeeded(bookingID, clientID, callback) {
+    fetch('./web/api/agreements/index.php?action=create_agreement', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            booking_id: bookingID
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Create Agreement Response:', data);
+        // Whether it succeeds or fails (e.g., already exists), proceed to load
+        if (callback) callback();
+    })
+    .catch(error => {
+        console.error('Error creating agreement:', error);
+        // Still proceed to load even if create fails
+        if (callback) callback();
+    });
 }
 
 function createAgreementModal() {
@@ -2164,55 +2236,191 @@ function undoSignature() {
 
 function loadAgreementPreview(bookingID, clientID) {
     const previewDiv = document.getElementById('agreementPreview');
-    previewDiv.innerHTML = '<p class="text-center"><i class="bi bi-hourglass-split"></i> Loading agreement...</p>';
+    previewDiv.innerHTML = '<div class="text-center"><i class="bi bi-hourglass-split"></i> Loading agreement...</div>';
     
-    fetch(`./web/api/agreements/index.php?action=get_agreement&booking_id=${bookingID}&client_id=${clientID}`)
-        .then(response => response.json())
-        .then(data => {
-            console.log('Agreement API Response:', data);
+    const apiUrl = `./web/api/agreements/index.php?action=get_agreement&booking_id=${bookingID}&client_id=${clientID}`;
+    
+    console.log('Loading agreement from:', apiUrl);
+    
+    fetch(apiUrl, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => {
+        console.log('Response status:', response.status);
+        console.log('Response headers:', response.headers.get('content-type'));
+        
+        // Check if response is actually JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            return response.text().then(text => {
+                console.error('Invalid response type. Expected JSON, got:', contentType);
+                console.error('Response body:', text.substring(0, 500));
+                throw new Error(`Expected JSON but got ${contentType}. First 500 chars: ${text.substring(0, 500)}`);
+            });
+        }
+        
+        return response.json();
+    })
+    .then(data => {
+        console.log('Agreement data:', data);
+        
+        if (data.success && data.data && data.data.agreement) {
+            const agreement = data.data.agreement;
             
-            if (data.success) {
-                if (data.agreement && data.agreement.ContractFile) {
-                    try {
-                        const html = atob(data.agreement.ContractFile);
-                        previewDiv.innerHTML = html;
-                    } catch (e) {
-                        console.error('Error decoding agreement:', e);
-                        previewDiv.innerHTML = '<p class="text-danger"><i class="bi bi-exclamation-triangle"></i> Error loading agreement preview</p>';
+            // Display agreement preview
+            if (agreement.ContractFile) {
+                try {
+                    let html = agreement.ContractFile;
+                    
+                    // Check if it's base64 encoded
+                    if (html.startsWith('PH') || html.match(/^[A-Za-z0-9+/=]+$/)) {
+                        html = atob(html);
                     }
-                } else {
-                    previewDiv.innerHTML = '<p class="text-warning"><i class="bi bi-exclamation-triangle"></i> Agreement found but no content available</p>';
+                    
+                    // Always inject Ellen's signature if available (auto-populated from system_config)
+                    // Also inject customer signature if the agreement is signed
+                    if (agreement.CateringSignature || (agreement.Status === 'signed' && agreement.CustomerSignature)) {
+                        // Create a temporary container to parse and modify the HTML
+                        const temp = document.createElement('div');
+                        temp.innerHTML = html;
+                        
+                        console.log('Agreement status:', agreement.Status, 'CustomerSignature:', !!agreement.CustomerSignature, 'CateringSignature:', !!agreement.CateringSignature);
+                        
+                        // Inject customer signature if signed
+                        if (agreement.Status === 'signed' && agreement.CustomerSignature) {
+                            const clientSigPlaceholder = temp.querySelector('#client-signature-placeholder');
+                            if (clientSigPlaceholder) {
+                                const sigImg = document.createElement('img');
+                                sigImg.src = agreement.CustomerSignature;
+                                sigImg.style.maxWidth = '100%';
+                                sigImg.style.maxHeight = '40px';
+                                sigImg.style.width = 'auto';
+                                sigImg.style.height = 'auto';
+                                sigImg.style.objectFit = 'contain';
+                                sigImg.style.display = 'block';
+                                sigImg.style.margin = '0 auto';
+                                clientSigPlaceholder.innerHTML = '';
+                                clientSigPlaceholder.appendChild(sigImg);
+                            }
+                        }
+                        
+                        // Always inject catering signature if available
+                        if (agreement.CateringSignature) {
+                            console.log('Adding catering signature to customer view');
+                            const cateringSigPlaceholder = temp.querySelector('#catering-signature-placeholder');
+                            if (cateringSigPlaceholder) {
+                                const cateringSigImg = document.createElement('img');
+                                cateringSigImg.src = agreement.CateringSignature;
+                                cateringSigImg.style.maxWidth = '100%';
+                                cateringSigImg.style.maxHeight = '40px';
+                                cateringSigImg.style.width = 'auto';
+                                cateringSigImg.style.height = 'auto';
+                                cateringSigImg.style.objectFit = 'contain';
+                                cateringSigImg.style.display = 'block';
+                                cateringSigImg.style.margin = '0 auto';
+                                cateringSigPlaceholder.innerHTML = '';
+                                cateringSigPlaceholder.appendChild(cateringSigImg);
+                            }
+                        }
+                        
+                        html = temp.innerHTML;
+                    }
+                    
+                    previewDiv.innerHTML = html;
+                } catch (e) {
+                    console.error('Error decoding agreement:', e);
+                    previewDiv.innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            <strong>Error loading agreement preview</strong>
+                            <br><small>${e.message}</small>
+                        </div>
+                    `;
                 }
             } else {
-                previewDiv.innerHTML = '<p class="text-danger"><i class="bi bi-x-circle"></i> ' + data.message + '</p>';
+                previewDiv.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>No contract file available</strong>
+                        <br><small>The agreement has not been generated yet.</small>
+                    </div>
+                `;
             }
-        })
-        .catch(error => {
-            console.error('Error loading agreement:', error);
-            previewDiv.innerHTML = '<p class="text-danger"><i class="bi bi-x-circle"></i> Error loading agreement</p>';
-        });
+        } else {
+            const errorMsg = data.message || 'Agreement not found';
+            previewDiv.innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Agreement Not Available</strong>
+                    <br><small>${errorMsg}</small>
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        console.error('Error loading agreement:', error);
+        previewDiv.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-circle me-2"></i>
+                <strong>Error Loading Agreement</strong>
+                <br><small>${error.message}</small>
+            </div>
+        `;
+    });
 }
 
 function checkAgreementStatus(bookingID, clientID) {
     fetch(`./web/api/agreements/index.php?action=get_agreement&booking_id=${bookingID}&client_id=${clientID}`)
         .then(response => response.json())
         .then(data => {
-            if (data.success && data.agreement && data.agreement.Status === 'signed') {
-                const signatureSection = document.getElementById('signatureSection');
-                if (signatureSection) {
+            const signatureSection = document.getElementById('signatureSection');
+            const modalFooter = document.querySelector('.modal-footer');
+            
+            if (!signatureSection || !modalFooter) return;
+            
+            if (data.success && data.agreement) {
+                const agreement = data.agreement;
+                
+                if (agreement.Status === 'signed' && agreement.CustomerSignature) {
+                    const signedDate = new Date(agreement.SignedDate);
+                    // Replace entire section with view-only version
                     signatureSection.innerHTML = `
-                        <div class="alert alert-success">
-                            <i class="bi bi-check-circle-fill me-2"></i>
-                            <strong>Agreement Already Signed</strong>
-                            <br>
-                            <small>Signed on: ${new Date(data.agreement.SignedDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</small>
-                        </div>
-                        ${data.agreement.CustomerSignature ? `
-                            <div style="text-align: center; margin-top: 15px;">
-                                <p style="font-weight: 600; margin-bottom: 10px;">Your Signature:</p>
-                                <img src="${data.agreement.CustomerSignature}" alt="Your Signature" style="max-width: 300px; border: 1px solid #ddd; padding: 10px; border-radius: 8px; background: white;">
+                        <div style="margin-top: 30px;">
+                            <div class="alert alert-success mb-3">
+                                <i class="bi bi-check-circle-fill me-2"></i>
+                                <strong>✓ Agreement Signed Successfully</strong>
                             </div>
-                        ` : ''}
+                            <h6 style="font-weight: 600; margin-bottom: 15px;">
+                                <i class="bi bi-pen me-2"></i>Your Signature
+                            </h6>
+                            <p style="color: #666; font-size: 0.85rem; margin-bottom: 10px;">
+                                <strong>Signed on:</strong> ${signedDate.toLocaleDateString('en-US', { 
+                                    year: 'numeric', 
+                                    month: 'long', 
+                                    day: 'numeric', 
+                                    hour: '2-digit', 
+                                    minute: '2-digit' 
+                                })}
+                            </p>
+                            <div style="border: 1px solid #28a745; border-radius: 8px; padding: 15px; background: #f0f8f4; text-align: center;">
+                                <img src="${agreement.CustomerSignature}" 
+                                     alt="Your Signature" 
+                                     style="max-width: 300px; max-height: 120px; object-fit: contain;">
+                                <p class="text-muted small mt-2 mb-0">Your Signature</p>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Hide the sign & submit button, show only close button
+                    modalFooter.innerHTML = `
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="bi bi-x me-1"></i>Close
+                        </button>
                     `;
                 }
             }
